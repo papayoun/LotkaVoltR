@@ -1,0 +1,225 @@
+---
+title: "Vignette Title"
+author: "Vignette Author"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+## Nice parameters
+
+Nice parameter set
+
+```{r sim_true_abundances}
+rm(list = ls())
+library(LotkaVoltR)
+simTimes <- seq(0, 1, length.out = 2 * 10^4 + 1)
+detect <- c(0.2, 0.3)
+gam <- matrix(c(0.5, 0.1, 0.1, 0.2), nrow = 2)
+# gam <- diag(1, 2)
+set.seed(123)
+a1 <- c(12, 0.05, 1)
+a2 <- c(2, 0.2, 0.1)
+params <- list(a1 = a1, a2 = a2, 
+               gam = gam,
+               mu0 = c(50,20), sigma0 = diag(1, 2),
+               cov = matrix(c(0.01, 0.005, 0.005, 0.01), ncol = 2), 
+               qs = detect, RWC = gam %*% gam,
+               wD = 1000,
+               wO = 1)
+get_euler_drift <- function(x0, delta_t){
+  mat_coef <- matrix(c(1, -1, -1,
+                       -1, 1, -1), nrow = 2, byrow = T)
+  mat_params <- matrix(c(a1, a2), nrow = 2, byrow = T)
+  mat_design <- matrix(c(1, x0), ncol = 1, nrow = length(x0) + 1)
+  x0 + as.numeric(x0 * (mat_params * mat_coef) %*% mat_design) * delta_t
+}
+get_euler_diff <- function(x0, delta_t){
+  gam_x <- gam * matrix(x0, ncol = 2, nrow = 2)
+  gam_x %*% t(gam_x) * delta_t
+}
+model <- LotkaVoltR:::LV_create(a1 = params$a1, a2 = params$a2, 
+                   gam = params$gam, mu0 = params$mu0, sigma0 = params$sigma0,
+                   cov = params$cov, 
+                   qs = params$qs)
+model_base <- LVM_create(a1, a2, mu0 = c(50, 20), gam = gam, 
+                         sigma0 = params$sigma0)
+selection <- seq(1, length(simTimes), by = 1)
+true_abundances <- LotkaVoltR:::LV_simulate(model,times = simTimes, 
+                               selection = selection)
+times <- simTimes[selection]
+df_ab <- data.frame(value = as.numeric(true_abundances[, 1:4]),
+                    animal = factor(rep(rep(c("prey", "pred"), rep(length(selection), 2)), 2)),
+                    status = factor(rep(c("Observed", "True"), rep(2 * length(selection), 2))),
+                    t = rep(times, 4))
+```
+
+
+```{r plot_selection}
+# library(ggplot2)
+# ggplot(data = df_ab, aes(x = t, y = value, col = animal, linetype = status)) + 
+#   geom_line(size = 0.5) + theme_bw() + labs(x = "Time", y = "Value",
+#                                             col = "Animal", linetype = "Signal")
+```
+
+## Obtaining density estimates
+
+```{r}
+library(tidyverse)
+library(parallel)
+n1 <- 1; n2 <- 2
+x0 <- true_abundances[n1, c("X1", "X2")] 
+xT <- true_abundances[n2, c("X1", "X2")]
+time_lag <- times[n2] - times[n1]
+
+library(parallel)
+# LotkaVoltR:::LV_density(model, x0, xT, time_lag, n_samples = 1)
+eul_dens <- mvtnorm::dmvnorm(xT, get_euler_drift(x0, time_lag), 
+                             get_euler_diff(x0, time_lag))
+n_rep <- 50000
+set.seed(sample(1:(n_rep), size = 1))
+ests <- mclapply(1:n_rep, 
+                 function(i){
+                   LotkaVoltR:::LV_density(model, x0, xT, time_lag, n_samples = 5)
+                 },
+  mc.cores = detectCores()) %>% 
+  unlist()
+max(ests)
+min(ests)
+res_est <- tibble(ind = 1:n_rep, x = ests)
+eul_dens <- mvtnorm::dmvnorm(xT, get_euler_drift(x0, time_lag), 
+                             get_euler_diff(x0, time_lag))
+mean(ests)
+# ggplot(res_est) + aes(x = x) + 
+#   geom_density(fill = "lightgray") +
+#   geom_vline(xintercept = eul_dens, col = "red")
+ggplot(res_est) + aes(x = ind, y = cumsum(x) / (1:n_rep)) + 
+  geom_point() + 
+  labs(x = "Number of replicates", y = "Empirical mean of estimates") +
+  geom_hline(yintercept = eul_dens)
+```
+
+<<<<<<< HEAD
+<!-- ## Simulating part0 -->
+
+<!-- ```{r} -->
+<!-- obs0 <- true_abundances[1, c("Y1", "Y2")]  -->
+<!-- true_X0 <- true_abundances[1, c("X1", "X2")]  -->
+<!-- n_part <- 5000 -->
+<!-- prop_model <- PLV_create(params) -->
+<!-- xi0 <- PLV_simX0(prop_model, obs0, n_part) -->
+<!-- dens <- PLV_getW0(prop_model, xi0, obs0) -->
+<!-- w0 <- dens[,1] -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- df <- cbind.data.frame(xi1 = xi0[,1], xi2 = xi0[,2], weight = w0) -->
+<!-- ggplot(df, aes(x = xi1, y = xi2, col = weight)) + geom_point() + -->
+<!--   geom_point(data = data.frame(xi1 = true_X0[1], xi2 = true_X0[2]), size = 1, -->
+<!--              col = "green") + -->
+<!--   geom_point(data = data.frame(xi1 = obs0[1] / params$qs[1],  -->
+<!--                                xi2 = obs0[2] / params$qs[2]), size = 1, -->
+<!--              col = "blue") + -->
+<!--   scale_colour_gradient(low = "#132B43", high = "#56B1F7", -->
+<!--                         space = "Lab", na.value = "grey50", guide = "colourbar", -->
+<!--                         aesthetics = "colour") + theme_bw() -->
+<!-- ``` -->
+=======
+## Simulating part0
+
+```{r}
+obs0 <- true_abundances[1, c("Y1", "Y2")] 
+true_X0 <- true_abundances[1, c("X1", "X2")] 
+n_part <- 5000
+prop_model <- PLV_create(params)
+xi0 <- PLV_simX0(prop_model, obs0, n_part)
+dens <- PLV_getW0(prop_model, xi0, obs0)
+w0 <- dens[,1]
+```
+
+```{r}
+df <- cbind.data.frame(xi1 = xi0[,1], xi2 = xi0[,2], weight = w0)
+ggplot(df, aes(x = xi1, y = xi2, col = weight)) + 
+  geom_point() +
+  geom_point(data = data.frame(xi1 = true_X0[1], xi2 = true_X0[2]),
+             size = 1,
+             col = "green") +
+  geom_point(data = data.frame(xi1 = obs0[1] / params$qs[1], 
+                               xi2 = obs0[2] / params$qs[2]), 
+             size = 1,
+             col = "blue") +
+  scale_color_viridis_c() +
+  labs(col = "Particle weight",
+           x = "X-value",
+           y = "Y-value")
+```
+>>>>>>> 96d005e509ff86ed391453031e527ba823fb4b4c
+
+<!-- ```{r} -->
+<!-- sel <- sample(1:nrow(xi0), replace = T, prob = w0) -->
+<!-- ancestor <- xi0[sel,] -->
+<!-- tl <- times[2] - times[1] -->
+<!-- obs1 <- true_abundances[2, c("Y1", "Y2")]  -->
+<!-- new_parts <- prop_model$simNextX(ancestor, obs1, tl) -->
+<!-- trueX <- true_abundances[2, c("X1", "X2")]  -->
+<!-- plot(new_parts) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- pD <- prop_model$propDens(ancestor, new_parts, obs1, tl) -->
+<!-- oD <- prop_model$obsDens(new_parts, obs1) -->
+
+<!-- mydf <- cbind.data.frame(anc.x = ancestor[,1], -->
+<!--                          anc.y = ancestor[,2], -->
+<!--                          new.x = new_parts[,1], -->
+<!--                          new.y = new_parts[,2], -->
+<!--                          pD = pD, -->
+<!--                          oD = oD) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- ggplot(mydf, aes(x = pD, y = oD)) + geom_point() -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- ggplot(mydf, aes(x = anc.x, y = anc.y)) +  -->
+<!--   # geom_segment(aes(xend = new.x, yend = new.y, col = mD), alpha = 0.1) +  -->
+<!--   # geom_point(alpha = 0.1) + -->
+<!--   geom_point(aes(x = new.x, y = new.y, col = oD)) +  -->
+<!--   geom_point(x=true_X0[1], y = true_X0[2], col = "green")+ -->
+<!--   geom_point(x=trueX[1], y = trueX[2], col = "red") -->
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- mD <- prop_model$transDens(ancestor, new_parts, tl, 50, 10) -->
+<!-- mydf$mD = mD -->
+<!-- mydf$W = mD * oD / pD -->
+<!-- mydf$W = mydf$W / sum(mydf$W) -->
+<!-- (ESS <- 1 / sum(mydf$W^2)) -->
+<!-- ggplot(mydf, aes(x = anc.x, y = anc.y)) +  -->
+<!--   # geom_segment(aes(xend = new.x, yend = new.y, col = mD), alpha = 0.1) +  -->
+<!--   # geom_point(alpha = 0.1) + -->
+<!--   geom_point(aes(x = new.x, y = new.y, col = log(W)), size = 0.3, alpha = 0.5) +  -->
+<!--   geom_point(x=true_X0[1], y = true_X0[2], col = "green")+ -->
+<!--   geom_point(x=trueX[1], y = trueX[2], col = "red") + -->
+<!--   scale_colour_gradient(low = "green", high = "blue", -->
+<!--   space = "Lab", na.value = "pink", guide = "colourbar", -->
+<!--   aesthetics = "colour") -->
+<!-- ``` -->
+
