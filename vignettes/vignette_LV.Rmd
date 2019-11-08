@@ -1,8 +1,11 @@
 ---
-title: "Vignette Title"
-author: "Vignette Author"
+title: "The stochastic Lotka-Volterra model, simulation and maximum likelihood inference"
+author: "Vignette by Pierre Gloaguen, based on a joint work with Sylvain Le Corff"
 date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
+output: 
+  rmarkdown::html_vignette:
+    number_sections: yes
+    toc: true
 vignette: >
   %\VignetteIndexEntry{Vignette Title}
   %\VignetteEncoding{UTF-8}
@@ -11,215 +14,264 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>"
-)
-```
-
-
-## Nice parameters
-
-Nice parameter set
-
-```{r sim_true_abundances}
-rm(list = ls())
-library(LotkaVoltR)
-simTimes <- seq(0, 1, length.out = 2 * 10^4 + 1)
-detect <- c(0.2, 0.3)
-gam <- matrix(c(0.5, 0.1, 0.1, 0.2), nrow = 2)
-# gam <- diag(1, 2)
-set.seed(123)
-a1 <- c(12, 0.05, 1)
-a2 <- c(2, 0.2, 0.1)
-params <- list(a1 = a1, a2 = a2, 
-               gam = gam,
-               mu0 = c(50,20), sigma0 = diag(1, 2),
-               cov = matrix(c(0.01, 0.005, 0.005, 0.01), ncol = 2), 
-               qs = detect, RWC = gam %*% gam,
-               wD = 1000,
-               wO = 1)
-get_euler_drift <- function(x0, delta_t){
-  mat_coef <- matrix(c(1, -1, -1,
-                       -1, 1, -1), nrow = 2, byrow = T)
-  mat_params <- matrix(c(a1, a2), nrow = 2, byrow = T)
-  mat_design <- matrix(c(1, x0), ncol = 1, nrow = length(x0) + 1)
-  x0 + as.numeric(x0 * (mat_params * mat_coef) %*% mat_design) * delta_t
-}
-get_euler_diff <- function(x0, delta_t){
-  gam_x <- gam * matrix(x0, ncol = 2, nrow = 2)
-  gam_x %*% t(gam_x) * delta_t
-}
-model <- LotkaVoltR:::LV_create(a1 = params$a1, a2 = params$a2, 
-                   gam = params$gam, mu0 = params$mu0, sigma0 = params$sigma0,
-                   cov = params$cov, 
-                   qs = params$qs)
-model_base <- LVM_create(a1, a2, mu0 = c(50, 20), gam = gam, 
-                         sigma0 = params$sigma0)
-selection <- seq(1, length(simTimes), by = 1)
-true_abundances <- LotkaVoltR:::LV_simulate(model,times = simTimes, 
-                               selection = selection)
-times <- simTimes[selection]
-df_ab <- data.frame(value = as.numeric(true_abundances[, 1:4]),
-                    animal = factor(rep(rep(c("prey", "pred"), rep(length(selection), 2)), 2)),
-                    status = factor(rep(c("Observed", "True"), rep(2 * length(selection), 2))),
-                    t = rep(times, 4))
-```
-
-
-```{r plot_selection}
-# library(ggplot2)
-# ggplot(data = df_ab, aes(x = t, y = value, col = animal, linetype = status)) + 
-#   geom_line(size = 0.5) + theme_bw() + labs(x = "Time", y = "Value",
-#                                             col = "Animal", linetype = "Signal")
-```
-
-## Obtaining density estimates
-
-```{r}
+```{r setup, message = FALSE, include = FALSE}
 library(tidyverse)
-library(parallel)
-n1 <- 1; n2 <- 2
-x0 <- true_abundances[n1, c("X1", "X2")] 
-xT <- true_abundances[n2, c("X1", "X2")]
-time_lag <- times[n2] - times[n1]
+knitr::opts_chunk$set(
+  eval = FALSE, 
+  collapse = TRUE,
+  comment = NA,
+  cache = T,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 6
+)
+theme_set(theme_gray() +
+            theme(
+              panel.border = element_rect(colour = "black", 
+                                          fill = rgb(0, 0, 0, 0)),
+              panel.grid = element_line(linetype = 2),
+              legend.background = element_blank(), 
+              text = element_text(family = "LM Roman 10"),
+              axis.title = element_text(size = 16),
+              legend.text = element_text(size = 14),
+              legend.title = element_text(size = 16),
+              axis.text = element_text(size = 14),
+              plot.subtitle = element_text(hjust = 0.5, size = 16),
+              plot.title = element_text(face = "bold", size = 18, hjust = 0.5)))
+```
 
+
+# The partially observed stochastic Lotka-Voltera Model
+
+## Hidden dynamics
+
+We consider a bivariate predator-prey dynamical system.
+More precisely, we consider a bivariate stochastic process $\mathbf{X}(t) = (X_1(t), X_2(t))$ modelling the abundance of a prey (the first component of $X(t)$) and of its predator (the second component). 
+We assume that $\mathbf{X}(t)$ is the solution of the following stochastic differntial equation:
+$$\text{d} \mathbf{X}(t) = \alpha_\theta(\mathbf{X}(t)) \text{d} t + \Gamma_\theta(\mathbf{X}(t))\text{d} \mathbf{W}(t),~\mathbf{X}(0) \sim \mathcal{N}_2(\mu_0, \Sigma_0)$$
+where:
+$$
+\begin{array}{rrcl}
+\alpha_\theta: & \mathbb{R}^2 & \mapsto & \mathbb{R}^2\\
+& x = (x_1, x_2)^T & \mapsto & \alpha_\theta(x) = \begin{pmatrix} x_1( a_{10} - a_{11}x_1 - a_{12}x_2)\\  x_2(-a_{20} + a_{21}x_1 - a_{22}x_2) \end{pmatrix}\\
+\Gamma_\theta: & \mathbb{R}^2 & \mapsto & \mathcal{M}_{2 \times 2}\\
+& x = (x_1, x_2)^T & \mapsto & \Gamma_\theta(x) = \begin{pmatrix}
+\Gamma_{11}x_1 & \Gamma_{12}x_1\\
+\Gamma_{21}x_2 & \Gamma_{22}x_2
+\end{pmatrix}
+\end{array}
+$$
+
+The hidden parameter $\theta$ is then given by the set of $\mathbf{a}_1, \mathbf{a}_2, \Gamma$ which are parameters lying respectively in $\mathbb{R}^3_+, \mathbb{R}^3_+$, and $\mathbb{R}^4$.
+
+## Observation process
+
+In our context, the hidden dynamics are not directly observed, but only partially, through an observation process $\mathbf{Y}(k) (0\leq k\leq n)$, observed only at times $t_0,\dots t_n$.
+
+The process is defined as:
+$$\mathbf{Y}(k) = \begin{pmatrix}
+q_1X_1(t_k)\text{e}^{\varepsilon_{1,k}}\\
+q_2X_2(t_k)\text{e}^{\varepsilon_{2,k}}
+\end{pmatrix}$$
+
+where $\mathbf{\varepsilon}_k \overset{ind}{\sim} \mathcal{N}_2(\mathbf{0}, \Sigma_{obs})$, with an unknown parameter $\Sigma_{obs}$. The parameters $q_1$ and $q_2$ are assumed to be known.
+
+# Simulation using the `LotkaVoltR` package
+
+In the following, the parameters were chosen as follow. 
+The names of the parameters refer to equations of the previous section.
+
+## Chosen parameters in this vignette
+
+```{r chosen_parameters, eval = T}
+rm(list = ls()) # Cleaning environment
+
+# Dynamics parameters
+
+a1 <- c(12, 0.05, 1) # Prey parameters
+a2 <- c(2, 0.2, 0.1) # Predator parameters
+Gamma <- matrix(c(0.5, 0.1, 0.1, 0.2), nrow = 2) # Diffusion parameters
+mu0 <- c(50,20) # Mean of the inital distribution
+Sigma0 <- diag(1, 2) # Variance of the initial distribution
+
+# Observation process parameters
+
+Sigma_obs <- matrix(c(0.01, 0.005, 0.005, 0.01), ncol = 2) # Observation noise
+q_values <- c(0.2, 0.3) # Known q values
+
+# Model creation
+
+library(LotkaVoltR) # Dedicated library
+# Creation of a model instance in R
+POLV_model <- POLV_create(a1 = a1, a2 = a2, gam = Gamma, mu0 = mu0, 
+                          sigma0 = Sigma0, cov = Sigma_obs, qs = q_values)
+POLV_model
+model_base <- LV_create(a1 = a1, a2 = a2, gam = Gamma, mu0 = mu0, 
+                          sigma0 = Sigma0)
+```
+
+## Simulation of a Lotka-Voltera model
+
+Once the model is instantiate (through the `POLV_create` function used above), it is straigforward to simulate from it, using an Euler scheme.
+
+```{r sim_true_abundances, eval = TRUE}
+# Simulation parameters
+
+simulation_times <- seq(from = 0, by = 1e-6, # Simulation time step, small!!
+                        length.out = 2 * 10^6 + 1)
+
+# If the simulation must be done at small time steps, the output can be thinned
+selection <- seq(1, length(simulation_times), by = 1000)
+simulated_process <- POLV_simulate(POLV_model,
+                                   times = simulation_times, 
+                                   selection = selection)
+observation_times <- simulation_times[selection]
+simulated_data <- data.frame(value = as.numeric(simulated_process[, -5]),
+                             animal = factor(rep(rep(c("prey", "pred"), 
+                                                     each = length(selection)),
+                                                 2)),
+                             status = factor(rep(c("Observed", "True"), 
+                                                 each = 2 * length(selection))),
+                             t = rep(observation_times, 4))
+```
+
+The `simulated_data` can then be be plotted, either with respect to time:
+
+```{r plot_LV_time, eval = TRUE, echo = FALSE}
+ggplot(data = simulated_data) + 
+  aes(x = t, y = value, col = animal, linetype = status) +
+  geom_line(size = 0.5)  + 
+  labs(x = "Time", y = "Value",
+       col = "Animal", linetype = "Signal")
+```
+
+or in the observation space:
+
+```{r plot_LV_space, echo = F, eval = T}
+simulated_data %>% 
+  filter(status == "Observed") %>% # Only the observed
+  spread(key = animal, value = value) %>% 
+  ggplot() + 
+  aes(x = prey, y = pred) +
+  geom_point(aes(alpha = t), col = "darkgreen")  + 
+  labs(x = "Observed number of preys", y = "Observed number of predators",
+       alpha = "Time")
+```
+
+# Evaluating likelihood when the process is observed without error
+
+Thanks to the continuous importance sampling algorithm, unbiased estimates of the 
+transtion density can be estimated for each set of parameters etween each point.
+
+More formally, as a Markov process, the process $\mathbf{X}(t)$ is defined by the density of the random variable $X(t+\delta)\vert X(t)$, which is assumed to have a density $q_\delta(X(t),\cdot)$.
+For observed values $\mathbf{x}(t_0),\dots \mathbf{x}(t_n)$ recorded at times $t_0,t1 = t_0+\delta_1,\dots t_n = t_{n-1} + \delta_n$, the likelihood is given by:
+
+$$L(\mathbf{x}_{t_0:t_n};\theta) = \prod_{k = 1}^n q_{\delta_{k}}(\mathbf{x}_{t_{k - 1}}, \mathbf{x}_{t_{k}})$$
+
+Unfortunately, this quantity is untractable. The CIS algorithm, though, can be performed to obtained unbiased estimates of this quantity
+
+## Obtaining unbiased density estimate for one transition
+
+Thanks to the function `POLV_density`, given a model, two (exact) observations, a time lag and a Monte Carlo effort, it is straighforward to obtain an estimate.
+
+```{r one_sample, echo = T, eval = T}
+# Considering the first two observations
+
+ind_obs0 <- 1 # Observation indexes
+ind_obs1 <- 2 
+x0 <- simulated_process[ind_obs0, c("X1", "X2")] # Initial number of prey/preds  
+x1 <- simulated_process[ind_obs1, c("X1", "X2")] # Subsequent number 
+delta_lag <- observation_times[ind_obs1] - observation_times[ind_obs0] # time lag
+
+# The density is then esimated
+
+estimated_density <- POLV_density(POLV_model = POLV_model, # For the given model
+                                  x0 = x0, # Starting point  
+                                  xT = x1, # Ending point
+                                  time_lag = delta_lag, # Duration between obs
+                                  n_samples = 50 # Monte Carlo effort
+                                  )
+estimated_density
+```
+
+We can ensure that this estimator converges to a stable value by replicating the procedure:
+
+```{r several_samples, eval = T}
 library(parallel)
-# LotkaVoltR:::LV_density(model, x0, xT, time_lag, n_samples = 1)
-eul_dens <- mvtnorm::dmvnorm(xT, get_euler_drift(x0, time_lag), 
-                             get_euler_diff(x0, time_lag))
-n_rep <- 50000
-set.seed(sample(1:(n_rep), size = 1))
-ests <- mclapply(1:n_rep, 
+n_rep <- 10000
+all_estimates <- mclapply(1:n_rep, 
                  function(i){
-                   LotkaVoltR:::LV_density(model, x0, xT, time_lag, n_samples = 5)
+                   RNGkind()
+                   set.seed(i)
+                   POLV_density(POLV_model = POLV_model, # For the given model
+                                  x0 = x0, # Starting point  
+                                  xT = x1, # Ending point
+                                  time_lag = delta_lag, # Duration between obs
+                                  n_samples = 50 # Monte Carlo effort
+                                  )
+                 },
+  mc.cores = detectCores()) %>% 
+  unlist() 
+```
+
+By plotting the evolution of the empirical means, we ensure the convergence:
+
+```{r plotting_empirical_mean, eval = T}
+all_estimates %>% 
+  tibble(x = .) %>% 
+  rowid_to_column(var = "ind") %>% 
+  ggplot() + 
+  aes(x = ind, y = cumsum(x) / (1:n_rep)) + 
+  geom_point() + 
+  labs(x = "Number of replicates", y = "Empirical mean of estimates") 
+```
+
+## Ensuring the matching with Euler estimate for small time lags
+
+The only way to ensure that the estimate is reliable (in this generic context) is
+to compare it when $\delta$ is really small, with the Euler estimate.
+
+In the following graph, the horizontal line shows the Euler density approximation 
+for $\delta = 10^{-8}$.
+
+```{r euler_comparison, echo = F, eval = T}
+set.seed(12)
+my_length <- 1001
+new_sim_times <- seq(0, by = 1e-8, length.out = my_length)
+new_selection <- 1:my_length
+new_obs <- POLV_simulate(POLV_model,
+                         times = new_sim_times, 
+                         selection = new_selection)
+ind_obs0 <- sample(1:(my_length - 1), size = 1) # Observation indexes
+ind_obs1 <- ind_obs0 + 1
+x0 <- new_obs[ind_obs0, c("X1", "X2")] # Initial number of prey/preds  
+x1 <- new_obs[ind_obs1, c("X1", "X2")]
+delta_lag <- new_sim_times[ind_obs1] - new_sim_times[ind_obs0]
+euler_density <- POLV_model$euler_density(x0, x1, delta_lag)
+library(parallel)
+n_rep <- 1e3
+all_estimates <- mclapply(1:n_rep, 
+                 function(i){
+                   RNGkind()
+                   set.seed(i)
+                   POLV_density(POLV_model = POLV_model, # For the given model
+                                  x0 = x0, # Starting point  
+                                  xT = x1, # Ending point
+                                  time_lag = delta_lag, # Duration between obs
+                                  n_samples = 1000 # Monte Carlo effort
+                                  )
                  },
   mc.cores = detectCores()) %>% 
   unlist()
-max(ests)
-min(ests)
-res_est <- tibble(ind = 1:n_rep, x = ests)
-eul_dens <- mvtnorm::dmvnorm(xT, get_euler_drift(x0, time_lag), 
-                             get_euler_diff(x0, time_lag))
-mean(ests)
-# ggplot(res_est) + aes(x = x) + 
-#   geom_density(fill = "lightgray") +
-#   geom_vline(xintercept = eul_dens, col = "red")
-ggplot(res_est) + aes(x = ind, y = cumsum(x) / (1:n_rep)) + 
+all_estimates %>% 
+  tibble(x = .) %>% 
+  rowid_to_column(var = "ind") %>% 
+  mutate(empirical_mean = cumsum(x) / ind) %>% 
+  slice(seq(1, n_rep, length.out = min(n_rep, 1e4 + 1))) %>% 
+  ggplot() + 
+  aes(x = ind, y = empirical_mean) + 
   geom_point() + 
   labs(x = "Number of replicates", y = "Empirical mean of estimates") +
-  geom_hline(yintercept = eul_dens)
+  geom_hline(yintercept = POLV_model$euler_density(x0, x1, delta_lag))
 ```
-
-<<<<<<< HEAD
-<!-- ## Simulating part0 -->
-
-<!-- ```{r} -->
-<!-- obs0 <- true_abundances[1, c("Y1", "Y2")]  -->
-<!-- true_X0 <- true_abundances[1, c("X1", "X2")]  -->
-<!-- n_part <- 5000 -->
-<!-- prop_model <- PLV_create(params) -->
-<!-- xi0 <- PLV_simX0(prop_model, obs0, n_part) -->
-<!-- dens <- PLV_getW0(prop_model, xi0, obs0) -->
-<!-- w0 <- dens[,1] -->
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- df <- cbind.data.frame(xi1 = xi0[,1], xi2 = xi0[,2], weight = w0) -->
-<!-- ggplot(df, aes(x = xi1, y = xi2, col = weight)) + geom_point() + -->
-<!--   geom_point(data = data.frame(xi1 = true_X0[1], xi2 = true_X0[2]), size = 1, -->
-<!--              col = "green") + -->
-<!--   geom_point(data = data.frame(xi1 = obs0[1] / params$qs[1],  -->
-<!--                                xi2 = obs0[2] / params$qs[2]), size = 1, -->
-<!--              col = "blue") + -->
-<!--   scale_colour_gradient(low = "#132B43", high = "#56B1F7", -->
-<!--                         space = "Lab", na.value = "grey50", guide = "colourbar", -->
-<!--                         aesthetics = "colour") + theme_bw() -->
-<!-- ``` -->
-=======
-## Simulating part0
-
-```{r}
-obs0 <- true_abundances[1, c("Y1", "Y2")] 
-true_X0 <- true_abundances[1, c("X1", "X2")] 
-n_part <- 5000
-prop_model <- PLV_create(params)
-xi0 <- PLV_simX0(prop_model, obs0, n_part)
-dens <- PLV_getW0(prop_model, xi0, obs0)
-w0 <- dens[,1]
-```
-
-```{r}
-df <- cbind.data.frame(xi1 = xi0[,1], xi2 = xi0[,2], weight = w0)
-ggplot(df, aes(x = xi1, y = xi2, col = weight)) + 
-  geom_point() +
-  geom_point(data = data.frame(xi1 = true_X0[1], xi2 = true_X0[2]),
-             size = 1,
-             col = "green") +
-  geom_point(data = data.frame(xi1 = obs0[1] / params$qs[1], 
-                               xi2 = obs0[2] / params$qs[2]), 
-             size = 1,
-             col = "blue") +
-  scale_color_viridis_c() +
-  labs(col = "Particle weight",
-           x = "X-value",
-           y = "Y-value")
-```
->>>>>>> 96d005e509ff86ed391453031e527ba823fb4b4c
-
-<!-- ```{r} -->
-<!-- sel <- sample(1:nrow(xi0), replace = T, prob = w0) -->
-<!-- ancestor <- xi0[sel,] -->
-<!-- tl <- times[2] - times[1] -->
-<!-- obs1 <- true_abundances[2, c("Y1", "Y2")]  -->
-<!-- new_parts <- prop_model$simNextX(ancestor, obs1, tl) -->
-<!-- trueX <- true_abundances[2, c("X1", "X2")]  -->
-<!-- plot(new_parts) -->
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- pD <- prop_model$propDens(ancestor, new_parts, obs1, tl) -->
-<!-- oD <- prop_model$obsDens(new_parts, obs1) -->
-
-<!-- mydf <- cbind.data.frame(anc.x = ancestor[,1], -->
-<!--                          anc.y = ancestor[,2], -->
-<!--                          new.x = new_parts[,1], -->
-<!--                          new.y = new_parts[,2], -->
-<!--                          pD = pD, -->
-<!--                          oD = oD) -->
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- ggplot(mydf, aes(x = pD, y = oD)) + geom_point() -->
-<!-- ``` -->
-
-
-<!-- ```{r} -->
-<!-- ggplot(mydf, aes(x = anc.x, y = anc.y)) +  -->
-<!--   # geom_segment(aes(xend = new.x, yend = new.y, col = mD), alpha = 0.1) +  -->
-<!--   # geom_point(alpha = 0.1) + -->
-<!--   geom_point(aes(x = new.x, y = new.y, col = oD)) +  -->
-<!--   geom_point(x=true_X0[1], y = true_X0[2], col = "green")+ -->
-<!--   geom_point(x=trueX[1], y = trueX[2], col = "red") -->
-<!-- ``` -->
-
-
-
-<!-- ```{r} -->
-<!-- mD <- prop_model$transDens(ancestor, new_parts, tl, 50, 10) -->
-<!-- mydf$mD = mD -->
-<!-- mydf$W = mD * oD / pD -->
-<!-- mydf$W = mydf$W / sum(mydf$W) -->
-<!-- (ESS <- 1 / sum(mydf$W^2)) -->
-<!-- ggplot(mydf, aes(x = anc.x, y = anc.y)) +  -->
-<!--   # geom_segment(aes(xend = new.x, yend = new.y, col = mD), alpha = 0.1) +  -->
-<!--   # geom_point(alpha = 0.1) + -->
-<!--   geom_point(aes(x = new.x, y = new.y, col = log(W)), size = 0.3, alpha = 0.5) +  -->
-<!--   geom_point(x=true_X0[1], y = true_X0[2], col = "green")+ -->
-<!--   geom_point(x=trueX[1], y = trueX[2], col = "red") + -->
-<!--   scale_colour_gradient(low = "green", high = "blue", -->
-<!--   space = "Lab", na.value = "pink", guide = "colourbar", -->
-<!--   aesthetics = "colour") -->
-<!-- ``` -->
 

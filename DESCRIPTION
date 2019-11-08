@@ -10,7 +10,6 @@ License: What license is it under?
 Depends: Rcpp (>= 1.0.0), mvtnorm
 Imports: Rcpp (>= 1.0.0), mvtnorm
 LinkingTo: Rcpp, RcppArmadillo, mvtnorm
-RcppModules: LV_Modude, LVPOD_Module, ProposalModel_Module
 RoxygenNote: 6.1.1
 Encoding: UTF-8
 Suggests: knitr,

@@ -3,7 +3,7 @@
 #ifndef LVModel_H
 #define LVModel_H
 
-//' @title Class of partially diffusion process ruled by a SINE model
+//' @title Class of partially diffusion process ruled by a LV model
 //' @name LVPOD
 //' @description POD with the bivariate SDE LV model
 //' and the observation model Y_t = X_t * exp(N(0, Sigma_obs)) 
@@ -102,7 +102,7 @@ public:
   }
   double getEulerDensity(const arma::colvec& start, const arma::colvec& end,
                          const double time_lag){
-    return model. dLV_euler(start, end, time_lag);
+    return model.dLV_euler(start, end, time_lag);
   }
   // GETTERS
   LVModel getModel() const{
