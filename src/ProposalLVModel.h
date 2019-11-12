@@ -84,7 +84,7 @@ public:
     return out;
   };
   arma::mat simFirstPart(unsigned int particleSize, 
-                                    const arma::colvec& observation) const{
+                         const arma::colvec& observation) const{
     
     arma::colvec scaledObs = trueModel.getScaledObs(observation);
     LVModel hiddenModel = trueModel.getModel();
@@ -196,7 +196,7 @@ public:
       //     output(i) = 0;
       //   }
       // }
-      std::cout << "Le minimum est " << Rcpp::min(output) << std::endl;
+      // std::cout << "Le minimum est " << Rcpp::min(output) << std::endl;
       stop_cond = Utils::checkAllPosOr0(output);
     }
     if(not stop_cond){

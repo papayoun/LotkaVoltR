@@ -189,7 +189,7 @@ estimated_density <- POLV_density(POLV_model = POLV_model, # For the given model
                                   x0 = x0, # Starting point  
                                   xT = x1, # Ending point
                                   time_lag = delta_lag, # Duration between obs
-                                  n_samples = 50 # Monte Carlo effort
+                                  n_samples = 500 # Monte Carlo effort
                                   )
 estimated_density
 ```
@@ -258,7 +258,7 @@ all_estimates <- mclapply(1:n_rep,
                                   x0 = x0, # Starting point  
                                   xT = x1, # Ending point
                                   time_lag = delta_lag, # Duration between obs
-                                  n_samples = 1000 # Monte Carlo effort
+                                  n_samples = 3000 # Monte Carlo effort
                                   )
                  },
   mc.cores = detectCores()) %>% 
@@ -273,5 +273,18 @@ all_estimates %>%
   geom_point() + 
   labs(x = "Number of replicates", y = "Empirical mean of estimates") +
   geom_hline(yintercept = POLV_model$euler_density(x0, x1, delta_lag))
+```
+
+# Particle filter
+
+The particle filtering is performed using a proposal model, which has the same parameters has the normal model, plus some details.
+
+```{r proposal_model}
+parameters_list <- list(a1 = a1, a2 = a2, mu0 = mu0,
+                        sigma0 = Sigma0, RWC = diag(10, 2), 
+                        qs = q_values, cov = Sigma_obs,
+                        wD = 1, wO = 1,
+                        gam = Gamma)
+proposal_model <- PLV_create(parameters_list)
 ```
 

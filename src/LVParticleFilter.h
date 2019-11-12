@@ -7,13 +7,13 @@ private:
   // // // Attributes // // //
   // Observations objects
   const arma::mat observations; //2 * n
-  const Rcpp::NumericVector observationTimes;
+  const Rcpp::NumericVector observationTimes; // size n
   //Model objects
   ProposalLVModel propModel;
   // Filtering objects
+  const unsigned int particleSize; // Number of particles
   arma::cube particleSet;
-  Rcpp::NumericMatrix filteringWeights;
-  const unsigned int particleSize;
+  Rcpp::NumericMatrix filteringWeights; // particleSize * n matrix
   const Rcpp::IntegerVector particleInd; // vector 1:particleSize
   const unsigned int densitySampleSize;
   Rcpp::NumericVector obsDens;
