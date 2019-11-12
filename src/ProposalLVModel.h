@@ -101,7 +101,7 @@ public:
     // arma::mat out = Utils::rmvnorm_low_trunc(particleSize, mean, covar, lb);
     return out;
   };
-  Rcpp::NumericVector evalInitialPropDensity(const arma::mat& particles, 
+  Rcpp::NumericVector evalInitialPropDensity(const arma::mat& particles, // particleSize * 2 matrix
                                          const arma::colvec& observation) const{
     // DebugMethods::debugprint(aroundObsCov, "Covariance");
     unsigned int particleSize = particles.n_rows;

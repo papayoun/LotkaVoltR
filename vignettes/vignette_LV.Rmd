@@ -288,3 +288,37 @@ parameters_list <- list(a1 = a1, a2 = a2, mu0 = mu0,
 proposal_model <- PLV_create(parameters_list)
 ```
 
+```{r get_normed_weights}
+get_normed_weights <- function(unnormed_weights){
+  return(unnormed_weights / sum(unnormed_weights))
+}
+```
+
+
+```{r getting_first_particles}
+observations <- simulated_process[, c("Y1", "Y2")]
+y0 <- observations[1, ]
+initial_particles <- proposal_model$simX0(10000, y0)
+p0 <- proposal_model$propDens0(initial_particles, y0)
+q0 <- proposal_model$modelDens0(initial_particles)
+w0 <- get_normed_weights(q0 / p0)
+colSums(w0 * initial_particles)
+simulated_process[1,]
+initial_particles %>% 
+  as_tibble() %>% 
+  rename(X1 = V1, X2 = V2) %>% 
+  mutate(weight = w0) %>% 
+  ggplot() +
+  aes(x = X1, y = X2) + 
+  geom_point(mapping = aes(alpha = weight)) + 
+  geom_point(data = as.data.frame(simulated_process[1,,drop =F]), col = "red")
+```
+
+```{r getting_next_particles}
+y1 <- observations[2, ]
+time_lag <- simulated_process[2, "t"] - simulated_process[1, "t"]
+new_particles <- proposal_model$simNextX(initial_particles, y1, time_lag)
+p1 <- proposal_model$propDens(initial_particles, new_particles, y1, time_lag)
+q1 <- proposal_model$transDens(initial_particles, new_particles, time_lag, 1000)
+```
+
