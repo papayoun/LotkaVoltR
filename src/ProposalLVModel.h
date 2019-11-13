@@ -180,7 +180,7 @@ public:
     unsigned int n_try = 0;
     DebugMethods db;
     while((not stop_cond) and (n_try < max_try)){
-      db.here();
+      // db.here();
       n_try += 1;
       Rcpp::NumericVector cur_est(particleSize);
       for(unsigned int i = 0; i < particleSize; i++){
@@ -190,19 +190,19 @@ public:
                 time_lag, sampleSize);
       }
       output = ((n_try - 1) * output + cur_est) / n_try;
-      // double tol = pow(10, -10);
-      // for(unsigned int i = 0; i < particleSize; i++){
-      //   if(std::abs(output(i)) < tol){
-      //     output(i) = 0;
-      //   }
-      // }
       // std::cout << "Le minimum est " << Rcpp::min(output) << std::endl;
       stop_cond = Utils::checkAllPosOr0(output);
     }
     if(not stop_cond){
       unsigned int n_neg = Utils::countNeg(output);
-      std::cout << "There are " << n_neg << " negative weights" << std::endl;
-      Rcpp::stop("Not all estimated transition densities are positive. Increase max_try");
+      // DebugMethods::debugprint(output, "weights", false);
+      Rcpp::warning("Not all estimated transition densities are positive. You could increase max_try to prevent this.");
+      std::cout << n_neg / particleSize * 100 << " percent of estimates were negative at the end and set to 0." << std::endl;
+      // for(unsigned int i = 0; i < particleSize; i++){
+      //   if(output(i) < 0){
+      //     output(i) = 0;
+      //   }
+      // }
     }
     return output;
   };
