@@ -2,7 +2,9 @@
 
 export(LVModel)
 export(LVPOD)
+export(LVParticleFilter)
 export(LV_create)
+export(PF_create)
 export(PLV_create)
 export(PLV_getW0)
 export(PLV_simX0)

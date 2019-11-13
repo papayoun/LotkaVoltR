@@ -6,7 +6,8 @@
 \usage{
 PLV_create(L = list(a1 = c(0.5, 0.1, 0.2), a2 = c(0.1, 0.4, 0.1), gam =
   matrix(c(1, -0.3, -0.3, 1), nrow = 2), mu0 = c(50, 20), sigma0 = diag(1,
-  2), cov = diag(1, 2), qs = c(0.2, 0.3), RWC = diag(10, 2)))
+  2), cov = diag(1, 2), qs = c(0.2, 0.3), RWC = diag(10, 2), wO = 1, wD =
+  1))
 }
 \arguments{
 \item{a1}{parameters for the prey dynamics}

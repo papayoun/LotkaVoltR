@@ -2,6 +2,10 @@
 #ifndef ProposalLVModel_H
 #define ProposalLVModel_H
 
+//' @title Class ParticleFilter
+//' @name LV_PF
+//' @description Class to run a particle filter
+//' @export LVParticleFilter
 class LVParticleFilter{
 private:
   // // // Attributes // // //
@@ -73,8 +77,13 @@ public:
       particleInd(Rcpp::seq_len(n_part)  - 1),
       obsDens(n_part), densitySampleSize(n_dens_samp){};
   // Getters
-  arma::cube getParticles() const{return particleSet;};
-  Rcpp::NumericMatrix getWeights() const{return filteringWeights;};
+  arma::cube getParticles() const{
+    return particleSet;
+    };
+  Rcpp::NumericMatrix getWeights() const{
+    return filteringWeights;
+    };
+  // Main function
   void runPF(){
     setInitalParticles();
     for(unsigned int k = 0; k < (observationTimes.size() - 1); k++){
@@ -82,5 +91,17 @@ public:
     }
   }
 };
+
+RCPP_MODULE(PF_Module) {
+  using namespace Rcpp;
+  class_<LVParticleFilter>("LVParticleFilter")
+    .constructor<arma::mat, Rcpp::NumericVector, Rcpp::List, 
+  unsigned int, unsigned int>("constructor")
+    .method("runPF", &LVParticleFilter::runPF)
+    .method("get_particles", &LVParticleFilter::getParticles)
+    .method("get_weights", &LVParticleFilter::getWeights)
+  ;
+}
+
 
 #endif

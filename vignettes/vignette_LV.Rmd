@@ -277,6 +277,8 @@ all_estimates %>%
 
 # Particle filter
 
+## Using the proposal model, and coding the PF in R
+
 The particle filtering is performed using a proposal model, which has the same parameters has the normal model, plus some details.
 
 ```{r proposal_model, eval = TRUE}
@@ -375,4 +377,10 @@ ggplot(mapping = aes(x = X1, y = X2)) +
   geom_point(data = as.data.frame(simulated_process))
 ```
 
+
+## Using the class `ParticleFilter`
+
+```{r PF_create}
+particle_filter <- PF_create(parameters_list)
+```
 

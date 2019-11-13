@@ -23,12 +23,14 @@ END_RCPP
 
 RcppExport SEXP _rcpp_module_boot_LV_Module();
 RcppExport SEXP _rcpp_module_boot_LVPOD_Module();
+RcppExport SEXP _rcpp_module_boot_PF_Module();
 RcppExport SEXP _rcpp_module_boot_ProposalLVModel_Module();
 
 static const R_CallMethodDef CallEntries[] = {
     {"_LotkaVoltR_runLV_PF", (DL_FUNC) &_LotkaVoltR_runLV_PF, 5},
     {"_rcpp_module_boot_LV_Module", (DL_FUNC) &_rcpp_module_boot_LV_Module, 0},
     {"_rcpp_module_boot_LVPOD_Module", (DL_FUNC) &_rcpp_module_boot_LVPOD_Module, 0},
+    {"_rcpp_module_boot_PF_Module", (DL_FUNC) &_rcpp_module_boot_PF_Module, 0},
     {"_rcpp_module_boot_ProposalLVModel_Module", (DL_FUNC) &_rcpp_module_boot_ProposalLVModel_Module, 0},
     {NULL, NULL, 0}
 };

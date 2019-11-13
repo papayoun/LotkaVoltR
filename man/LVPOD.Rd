@@ -2,7 +2,7 @@
 % Please edit documentation in R/RcppExports.R
 \name{LVPOD}
 \alias{LVPOD}
-\title{Class of partially diffusion process ruled by a SINE model}
+\title{Class of partially diffusion process ruled by a LV model}
 \description{
 POD with the bivariate SDE LV model
 and the observation model Y_t = X_t * exp(N(0, Sigma_obs))

@@ -14,6 +14,12 @@ NULL
 #' @export LVPOD
 NULL
 
+#' @title Class ParticleFilter
+#' @name LV_PF
+#' @description Class to run a particle filter
+#' @export LVParticleFilter
+NULL
+
 #' @title ProposalModel for LVPOD
 #' @name ProposalLVModel
 #' @description Proposoal model with optimal filter

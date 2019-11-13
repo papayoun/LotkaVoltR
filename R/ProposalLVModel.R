@@ -19,7 +19,8 @@
                                   sigma0 = diag(1, 2),
                                   cov = diag(1, 2),
                                   qs = c(0.2, 0.3),
-                                  RWC = diag(10, 2))){
+                                  RWC = diag(10, 2),
+                                  wO = 1, wD = 1)){
     model <- new(ProposalLVModel, L)
     model
   }
