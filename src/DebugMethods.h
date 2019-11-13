@@ -62,9 +62,10 @@ public:
     }
     std::cout << x(n - 1) << std::endl;
   }
-  static void debugprint(Rcpp::NumericVector x, std::string name = "", bool summary = true){
+  static void debugprint(Rcpp::NumericVector x, std::string name = "", 
+                         bool summary = true){
     int n = x.size();
-    std::cout << "Vecteur"<< name<< ": ";
+    std::cout << "Vecteur "<< name<< ": ";
     if(summary){
       std::cout << "mean "<< mean(x) << std::endl;
       std::cout << "var "<< var(x) << std::endl;

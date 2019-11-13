@@ -198,11 +198,11 @@ public:
       // DebugMethods::debugprint(output, "weights", false);
       Rcpp::warning("Not all estimated transition densities are positive. You could increase max_try to prevent this.");
       std::cout << n_neg / particleSize * 100 << " percent of estimates were negative at the end and set to 0." << std::endl;
-      // for(unsigned int i = 0; i < particleSize; i++){
-      //   if(output(i) < 0){
-      //     output(i) = 0;
-      //   }
-      // }
+      for(unsigned int i = 0; i < particleSize; i++){
+        if(output(i) < 0){
+          output(i) = 0;
+        }
+      }
     }
     return output;
   };

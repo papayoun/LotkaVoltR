@@ -17,7 +17,7 @@ editor_options:
 ```{r setup, message = FALSE, include = FALSE}
 library(tidyverse)
 knitr::opts_chunk$set(
-  eval = FALSE, 
+  eval = TRUE,
   collapse = TRUE,
   comment = NA,
   cache = T,
@@ -118,10 +118,10 @@ Once the model is instantiate (through the `POLV_create` function used above), i
 # Simulation parameters
 
 simulation_times <- seq(from = 0, by = 1e-6, # Simulation time step, small!!
-                        length.out = 2 * 10^6 + 1)
+                        length.out = 1.5*10^6 + 1)
 
 # If the simulation must be done at small time steps, the output can be thinned
-selection <- seq(1, length(simulation_times), by = 1000)
+selection <- seq(1, length(simulation_times), length.out = 301)
 simulated_process <- POLV_simulate(POLV_model,
                                    times = simulation_times, 
                                    selection = selection)
@@ -279,9 +279,9 @@ all_estimates %>%
 
 The particle filtering is performed using a proposal model, which has the same parameters has the normal model, plus some details.
 
-```{r proposal_model}
+```{r proposal_model, eval = TRUE}
 parameters_list <- list(a1 = a1, a2 = a2, mu0 = mu0,
-                        sigma0 = Sigma0, RWC = diag(10, 2), 
+                        sigma0 = Sigma0, RWC = diag(0.005, 2), 
                         qs = q_values, cov = Sigma_obs,
                         wD = 1, wO = 1,
                         gam = Gamma)
@@ -296,9 +296,11 @@ get_normed_weights <- function(unnormed_weights){
 
 
 ```{r getting_first_particles}
+set.seed(123)
 observations <- simulated_process[, c("Y1", "Y2")]
 y0 <- observations[1, ]
-initial_particles <- proposal_model$simX0(10000, y0)
+n_particles <- 1e2
+initial_particles <- proposal_model$simX0(n_particles, y0)
 p0 <- proposal_model$propDens0(initial_particles, y0)
 q0 <- proposal_model$modelDens0(initial_particles)
 w0 <- get_normed_weights(q0 / p0)
@@ -314,11 +316,63 @@ initial_particles %>%
   geom_point(data = as.data.frame(simulated_process[1,,drop =F]), col = "red")
 ```
 
-```{r getting_next_particles}
-y1 <- observations[2, ]
-time_lag <- simulated_process[2, "t"] - simulated_process[1, "t"]
-new_particles <- proposal_model$simNextX(initial_particles, y1, time_lag)
-p1 <- proposal_model$propDens(initial_particles, new_particles, y1, time_lag)
-q1 <- proposal_model$transDens(initial_particles, new_particles, time_lag, 1000)
+
+```{r getting_weighted_particle_set}
+set.seed(123)
+n_obs <- nrow(observations)
+particle_set <- array(dim = c(n_particles, 2, n_obs))
+particle_set[,,1] <- initial_particles
+weights <- matrix(nrow = n_particles, ncol = n_obs)
+weights[, 1] <- w0
+for(i in 2:n_obs){
+  # print(paste("Iteration", i))
+  kept_particles <- sample(1:n_particles, 
+                           size = n_particles,
+                           replace = T,
+                           prob = weights[, i - 1])
+  old_particles <- particle_set[kept_particles,, i - 1]
+  current_y <- observations[i, ]
+  time_lag <- simulated_process[i, "t"] - simulated_process[i - 1, "t"]
+  new_particles <- proposal_model$simNextX(old_particles, current_y, time_lag)
+  proposal_density <- proposal_model$propDens(old_particles, new_particles, 
+                                              current_y, time_lag)
+  transition_density <- proposal_model$transDens(old_particles, new_particles, 
+                                 time_lag, 100, 200)
+  observation_density <- proposal_model$obsDens(new_particles, current_y)
+  weights[, i] <- get_normed_weights(observation_density * transition_density / 
+                                       proposal_density) 
+  particle_set[,, i] <- new_particles
+}
 ```
+
+
+```{r get_effective_sample_size}
+get_effective_sample_size <- function(w) sum(w)^2 / sum(w^2)
+ess <- apply(weights, 2, get_effective_sample_size)
+plot(ess)
+summary(ess)
+```
+
+
+```{r representing_result}
+all_results <- map_dfr(1:n_obs, function(i){
+  tibble(X1 = particle_set[, 1, i],
+         X2 = particle_set[, 2, i],
+         weight = weights[, i],
+         time  = observation_times[i])
+})
+
+empirical_mean <- all_results %>% 
+  mutate(time = as.factor(time)) %>% 
+  group_by(time) %>% 
+  summarise(X1 = sum(X1 * weight),
+            X2 = sum(X2 * weight))
+ggplot(mapping = aes(x = X1, y = X2)) +
+  geom_point(data = as.data.frame(simulated_process)) +
+  geom_path(data = empirical_mean, col = "blue")
+ggplot(mapping = aes(x = X1, y = X2)) +
+  geom_point(data = all_results, mapping = aes(alpha = weight), col = "blue") +
+  geom_point(data = as.data.frame(simulated_process))
+```
+
 
