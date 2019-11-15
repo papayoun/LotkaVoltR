@@ -381,6 +381,7 @@ ggplot(mapping = aes(x = X1, y = X2)) +
 ## Using the class `ParticleFilter`
 
 ```{r PF_create}
-particle_filter <- PF_create(parameters_list)
+particle_filter <- PF_create(parameters_list, observations, observation_times, n_particles,
+                             n_euler_skel = 100)
 ```
 
