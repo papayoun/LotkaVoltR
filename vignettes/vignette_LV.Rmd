@@ -386,6 +386,9 @@ ggplot(mapping = aes(x = X1, y = X2)) +
 ## Using the class `ParticleFilter`
 
 ```{r PF_create}
+library(tictoc)
+observations <- simulated_process[, c("Y1", "Y2")]
+n_particles <- 1e2
 tic()
 particle_filter <- PF_create(parameters_list, t(observations),
                              observation_times, n_particles,
