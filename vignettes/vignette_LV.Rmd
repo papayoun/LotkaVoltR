@@ -320,8 +320,12 @@ initial_particles %>%
 
 
 ```{r getting_weighted_particle_set}
-set.seed(123)
 n_obs <- nrow(observations)
+tic()
+n_particles <- 1e2
+initial_particles <- proposal_model$simX0(n_particles, y0)
+p0 <- proposal_model$propDens0(initial_particles, y0)
+q0 <- proposal_model$modelDens0(initial_particles)
 particle_set <- array(dim = c(n_particles, 2, n_obs))
 particle_set[,,1] <- initial_particles
 weights <- matrix(nrow = n_particles, ncol = n_obs)
@@ -345,6 +349,7 @@ for(i in 2:n_obs){
                                        proposal_density) 
   particle_set[,, i] <- new_particles
 }
+toc()
 ```
 
 
@@ -381,7 +386,26 @@ ggplot(mapping = aes(x = X1, y = X2)) +
 ## Using the class `ParticleFilter`
 
 ```{r PF_create}
-particle_filter <- PF_create(parameters_list, observations, observation_times, n_particles,
+tic()
+particle_filter <- PF_create(parameters_list, t(observations),
+                             observation_times, n_particles,
                              n_euler_skel = 100)
+particle_filter$runPF()
+toc()
+```
+
+```{r plot_results_PF}
+n_obs <- nrow(observations)
+my_particle_set <- particle_filter$get_particles()
+my_particle_weights <- particle_filter$get_weights()
+results <- map_dfr(1:n_obs, function(i){
+  tibble(X1 = my_particle_set[, 1, i],
+         X2 = my_particle_set[, 2, i],
+         weight = my_particle_weights[, i],
+         time  = observation_times[i])
+})
+ggplot(mapping = aes(x = X1, y = X2)) +
+  geom_point(data = results, mapping = aes(alpha = weight), col = "blue") +
+  geom_point(data = as.data.frame(simulated_process))
 ```
 

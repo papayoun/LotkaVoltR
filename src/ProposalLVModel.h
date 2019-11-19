@@ -173,7 +173,7 @@ public:
                                             const arma::mat& newParticles,
                                             double time_lag, 
                                             unsigned int sampleSize, 
-                                            unsigned int max_try = 500){
+                                            unsigned int max_try = 200){
     unsigned int particleSize = oldParticles.n_rows;
     Rcpp::NumericVector output(particleSize); output.fill(0);
     bool stop_cond = false;
@@ -197,7 +197,7 @@ public:
       unsigned int n_neg = Utils::countNeg(output);
       // DebugMethods::debugprint(output, "weights", false);
       Rcpp::warning("Not all estimated transition densities are positive. You could increase max_try to prevent this.");
-      std::cout << n_neg / particleSize * 100 << " percent of estimates were negative at the end and set to 0." << std::endl;
+      std::cout << n_neg  << " density estimates were negative at the end and set to 0." << std::endl;
       for(unsigned int i = 0; i < particleSize; i++){
         if(output(i) < 0){
           output(i) = 0;

@@ -85,8 +85,12 @@ public:
     };
   // Main function
   void runPF(){
+    // DebugMethods db;
+    // db.here();
     setInitalParticles();
+    // db.here();
     for(unsigned int k = 0; k < (observationTimes.size() - 1); k++){
+      // db.here();
       propagateParticles(k);
     }
   }
