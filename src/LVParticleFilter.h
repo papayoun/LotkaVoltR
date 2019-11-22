@@ -24,6 +24,8 @@ private:
   unsigned int backwardSamplingCounter; // To keep track of how many tries were done
   Rcpp::IntegerVector  backwardIndexCandidates; // simulate several at a time
   // Inference objects
+  const Rcpp::IntegerVector particleIndexes;
+  const unsigned int backwardSampleSize = 30;
   std::vector<arma::mat> tau_EX_old; // cube of dim particleSize * 2 * observationSize
   std::vector<arma::mat> tau_EX; // cube of dim particleSize * 2 * observationSize
   std::vector<Rcpp::NumericMatrix> tau_EStep;// numberModels matrices of dim particleSize * observationSize
@@ -40,11 +42,16 @@ private:
     }
     tau_EStep = initial;
   };
-  void initializeTau_EX(){
+  void initializeTau_EX(bool both = false){
     arma::mat zeroMatrix(particleSize, 2);
+    zeroMatrix.fill(0);
     for(unsigned int i = 0; i < observations.n_cols; i++){
-      tau_EX_old[i] = zeroMatrix;
       tau_EX[i] = zeroMatrix;
+    }
+    if(both){
+      for(unsigned int i = 0; i < observations.n_cols; i++){
+        tau_EX_old[i] = zeroMatrix;
+      }
     }
   };
   void initializeParticleSet(){
@@ -67,7 +74,7 @@ private:
     filteringWeights(Rcpp::_, 0) = normWeights(unNormedWeights);
   };
   // Propagation method
-  void updateTauTracking_IS(const unsigned int& childIndex, 
+  void updateTauTracking_IS(const unsigned int& timeStampIndex, 
                             const unsigned int& childParticleIndex,
                             const unsigned int& ancestorParticleIndex,
                             const double IS_weight,
@@ -75,10 +82,10 @@ private:
     arma::rowvec h_term(2);
     h_term.fill(0);
     if(tracked_X){
-      h_term = particleSet[ancestorParticleIndex].row(childIndex - 1);
+      h_term = particleSet[timeStampIndex].row(ancestorParticleIndex);
     }
-    arma::rowvec old = tau_EX_old[childIndex - 1].row(ancestorParticleIndex);
-    tau_EX[childIndex].row(childParticleIndex) += IS_weight * (old + h_term);
+    arma::rowvec old = tau_EX_old[timeStampIndex].row(ancestorParticleIndex);
+    tau_EX[timeStampIndex].row(childParticleIndex) += IS_weight * (old + h_term);
   };
   void propagateParticles(const unsigned int& ancestorIndex){// Particle propagation
     double time_lag = (observationTimes[ancestorIndex + 1] -
@@ -120,6 +127,7 @@ public:
       tau_EX_old(obs_.n_cols),
       tau_EX(obs_.n_cols),
       particleSet(obs_.n_cols),
+      particleIndexes(Rcpp::seq_len(n_part)  - 1),
       densitySampleSize(n_dens_samp){
     initializeParticleSet();
   };
@@ -128,6 +136,13 @@ public:
     arma::cube output(particleSize, 2, observations.n_cols);
     for(int i = 0; i < observations.n_cols; i ++){
       output.slice(i) = particleSet[i];
+    }
+    return output;
+  };
+  arma::cube get_tau_EX() const{
+    arma::cube output(particleSize, 2, observations.n_cols);
+    for(int i = 0; i < observations.n_cols; i ++){
+      output.slice(i) = tau_EX[i];
     }
     return output;
   };
@@ -145,44 +160,62 @@ public:
       propagateParticles(k);
     }
   };
-//   arma::mat eval_EX_smoothing(){
-//     unsigned int observationSize = observations.n_cols;
-//     arma::mat output(observationSize, 2);
-//     initializeTau_EX();// Initialize matrix of 0
-//     setInitalParticles();
-//     for(int k = 0; k < (observationSize - 1);k++){
-//       propagateParticles(k);
-//       // initializeBackwardSampling(k);// Samples of ancestor index is made here
-//       Rcpp::NumericVector currentWeights = filteringWeights(Rcpp::_, k);
-//       for(unsigned int i = 0; i < particleSize; i++){// i indexes particles
-//         // setDensityUpperBound(k + 1, i);// Density upperbound for particle xi_{k+1}^i
-//         sum_IS_weights = 0;
-//         double curParticle = particleSet(i, k + 1);
-//         // Choosing ancestoir
-//         Rcpp::IntegerVector ancestInd = GenericFunctions::sampleReplace(particleIndexes,
-//                                                                         backwardSampleSize,
-//                                                                         currentWeights);
-//         Rcpp::NumericVector ancestPart(backwardSampleSize);
-//         Rcpp::NumericVector IS_weights(backwardSampleSize);
-//         for(unsigned int l = 0; l < backwardSampleSize; l++){
-//           ancestPart(l) = particleSet(ancestInd(l), k);
-//           IS_weights(l) = propModel.evalTransitionDensityUnit(ancestPart(l), 
-//                      curParticle,
-//                      observationTimes(k), 
-//                      observationTimes(k + 1),
-//                      densitySampleSize, 
-//                      false);
-//           sum_IS_weights += IS_weights(l);
-//         }
-//         IS_weights = IS_weights / sum_IS_weights;
-//         for(unsigned int l = 0; l < backwardSampleSize; l++){
-//           updateTauTracking_IS(k + 1, i, ancestInd(l), IS_weights(l), update_X);
-//           //k + 1 is the time index from which the backward is done, 
-//           //i is the corresponding particle of this generation
-//         }
-//         // std::cout << "sum of IS_Weights" << sum_IS_weights << std::endl;
-//       }
-//     }
+  Rcpp::NumericMatrix eval_EX_smoothing(){
+    unsigned int observationSize = observations.n_cols;
+    initializeTau_EX(true);// Initialize both tau_EX and tau_EX_old to 0 arrays
+    setInitalParticles();
+    DebugMethods db;
+    for(int k = 0; k < (observationSize - 1); k++){
+      // DebugMethods db;
+      std::cout << "observation " << k <<std::endl;
+      propagateParticles(k);
+      // initializeBackwardSampling(k);// Samples of ancestor index is made here
+      Rcpp::NumericVector currentWeights = filteringWeights(Rcpp::_, k);
+      for(unsigned int i = 0; i < particleSize; i++){// i indexes particles
+        // db.here();
+        // DebugMethods::debugprint(tau_EX[0], "EX");
+        // DebugMethods::debugprint(tau_EX_old[0], "EX_old");
+        // setDensityUpperBound(k + 1, i);// Density upperbound for particle xi_{k+1}^i
+        double sum_IS_weights = 0;
+        arma::mat curParticle = particleSet[k + 1].row(i);
+        // Choosing ancestoir
+        Rcpp::IntegerVector ancestInd = Utils::sampleReplace(particleIndexes,
+                                                             backwardSampleSize,
+                                                             currentWeights);
+        Rcpp::NumericVector IS_weights(backwardSampleSize);
+        for(unsigned int l = 0; l < backwardSampleSize; l++){
+          arma::mat ancParticle = particleSet[k].row(ancestInd(l));
+          IS_weights(l) = propModel.evalTransitionDensity(ancParticle,
+                     curParticle,
+                     observationTimes(k + 1) - observationTimes(k),
+                     densitySampleSize, 200)(0);
+          sum_IS_weights += IS_weights(l);
+        }
+        IS_weights = IS_weights / sum_IS_weights;
+        for(unsigned int l = 0; l < backwardSampleSize; l++){
+          for(int j = 0; j < k + 1; j++){
+            bool get_h = (j == k); // In this cas, the h function is either x or 0
+            updateTauTracking_IS(j, i, ancestInd(l), IS_weights(l), get_h);
+          }
+        }
+      }
+      tau_EX_old = tau_EX; // Updating the functionnal tau_{k-1} <- tau_k
+      initializeTau_EX(false); // reputing tau_EX to 0
+    }
+    tau_EX_old[observationSize - 1] = particleSet[observationSize - 1]; 
+    Rcpp::NumericVector lastWeights = filteringWeights(Rcpp::_, 
+                                                       observationSize - 1);
+    Rcpp::NumericMatrix output(observationSize, 2);
+    output.fill(0);
+    for(int k = 0; k < observationSize; k++){
+      arma::mat currentTau = tau_EX_old[k];
+      for(int i = 0; i < particleSize; i ++){
+        output(k, 0) += lastWeights(i) * currentTau(i, 0);
+        output(k, 1) += lastWeights(i) * currentTau(i, 1);
+      }
+    }
+    return output;
+}// End of eval_EX_smoothing
 }; // End of the class
 
 RCPP_MODULE(PF_Module) {
@@ -193,6 +226,8 @@ RCPP_MODULE(PF_Module) {
     .method("runPF", &LVParticleFilter::runPF)
     .method("get_particles", &LVParticleFilter::getParticles)
     .method("get_weights", &LVParticleFilter::getWeights)
+    .method("runSmoothing", &LVParticleFilter::eval_EX_smoothing)
+    .method("get_tau_EX", &LVParticleFilter::get_tau_EX)
   ;
 }
 

@@ -320,36 +320,36 @@ initial_particles %>%
 
 
 ```{r getting_weighted_particle_set}
-n_obs <- nrow(observations)
-tic()
-n_particles <- 1e2
-initial_particles <- proposal_model$simX0(n_particles, y0)
-p0 <- proposal_model$propDens0(initial_particles, y0)
-q0 <- proposal_model$modelDens0(initial_particles)
-particle_set <- array(dim = c(n_particles, 2, n_obs))
-particle_set[,,1] <- initial_particles
-weights <- matrix(nrow = n_particles, ncol = n_obs)
-weights[, 1] <- w0
-for(i in 2:n_obs){
-  # print(paste("Iteration", i))
-  kept_particles <- sample(1:n_particles, 
-                           size = n_particles,
-                           replace = T,
-                           prob = weights[, i - 1])
-  old_particles <- particle_set[kept_particles,, i - 1]
-  current_y <- observations[i, ]
-  time_lag <- simulated_process[i, "t"] - simulated_process[i - 1, "t"]
-  new_particles <- proposal_model$simNextX(old_particles, current_y, time_lag)
-  proposal_density <- proposal_model$propDens(old_particles, new_particles, 
-                                              current_y, time_lag)
-  transition_density <- proposal_model$transDens(old_particles, new_particles, 
-                                 time_lag, 100, 200)
-  observation_density <- proposal_model$obsDens(new_particles, current_y)
-  weights[, i] <- get_normed_weights(observation_density * transition_density / 
-                                       proposal_density) 
-  particle_set[,, i] <- new_particles
-}
-toc()
+# n_obs <- nrow(observations)
+# tic()
+# n_particles <- 1e2
+# initial_particles <- proposal_model$simX0(n_particles, y0)
+# p0 <- proposal_model$propDens0(initial_particles, y0)
+# q0 <- proposal_model$modelDens0(initial_particles)
+# particle_set <- array(dim = c(n_particles, 2, n_obs))
+# particle_set[,,1] <- initial_particles
+# weights <- matrix(nrow = n_particles, ncol = n_obs)
+# weights[, 1] <- w0
+# for(i in 2:n_obs){
+#   # print(paste("Iteration", i))
+#   kept_particles <- sample(1:n_particles, 
+#                            size = n_particles,
+#                            replace = T,
+#                            prob = weights[, i - 1])
+#   old_particles <- particle_set[kept_particles,, i - 1]
+#   current_y <- observations[i, ]
+#   time_lag <- simulated_process[i, "t"] - simulated_process[i - 1, "t"]
+#   new_particles <- proposal_model$simNextX(old_particles, current_y, time_lag)
+#   proposal_density <- proposal_model$propDens(old_particles, new_particles, 
+#                                               current_y, time_lag)
+#   transition_density <- proposal_model$transDens(old_particles, new_particles, 
+#                                  time_lag, 100, 200)
+#   observation_density <- proposal_model$obsDens(new_particles, current_y)
+#   weights[, i] <- get_normed_weights(observation_density * transition_density / 
+#                                        proposal_density) 
+#   particle_set[,, i] <- new_particles
+# }
+# toc()
 ```
 
 
@@ -362,24 +362,24 @@ summary(ess)
 
 
 ```{r representing_result}
-all_results <- map_dfr(1:n_obs, function(i){
-  tibble(X1 = particle_set[, 1, i],
-         X2 = particle_set[, 2, i],
-         weight = weights[, i],
-         time  = observation_times[i])
-})
-
-empirical_mean <- all_results %>% 
-  mutate(time = as.factor(time)) %>% 
-  group_by(time) %>% 
-  summarise(X1 = sum(X1 * weight),
-            X2 = sum(X2 * weight))
-ggplot(mapping = aes(x = X1, y = X2)) +
-  geom_point(data = as.data.frame(simulated_process)) +
-  geom_path(data = empirical_mean, col = "blue")
-ggplot(mapping = aes(x = X1, y = X2)) +
-  geom_point(data = all_results, mapping = aes(alpha = weight), col = "blue") +
-  geom_point(data = as.data.frame(simulated_process))
+# all_results <- map_dfr(1:n_obs, function(i){
+#   tibble(X1 = particle_set[, 1, i],
+#          X2 = particle_set[, 2, i],
+#          weight = weights[, i],
+#          time  = observation_times[i])
+# })
+# 
+# empirical_mean <- all_results %>% 
+#   mutate(time = as.factor(time)) %>% 
+#   group_by(time) %>% 
+#   summarise(X1 = sum(X1 * weight),
+#             X2 = sum(X2 * weight))
+# ggplot(mapping = aes(x = X1, y = X2)) +
+#   geom_point(data = as.data.frame(simulated_process)) +
+#   geom_path(data = empirical_mean, col = "blue")
+# ggplot(mapping = aes(x = X1, y = X2)) +
+#   geom_point(data = all_results, mapping = aes(alpha = weight), col = "blue") +
+#   geom_point(data = as.data.frame(simulated_process))
 ```
 
 
@@ -388,12 +388,11 @@ ggplot(mapping = aes(x = X1, y = X2)) +
 ```{r PF_create}
 library(tictoc)
 observations <- simulated_process[, c("Y1", "Y2")]
-n_particles <- 1e2
 tic()
 particle_filter <- PF_create(parameters_list, t(observations),
-                             observation_times, n_particles,
+                             observation_times, 2e2,
                              n_euler_skel = 100)
-particle_filter$runPF()
+smoothing_exp <- particle_filter$runSmoothing()
 toc()
 ```
 
@@ -407,8 +406,18 @@ results <- map_dfr(1:n_obs, function(i){
          weight = my_particle_weights[, i],
          time  = observation_times[i])
 })
+empirical_mean <- results %>% 
+  mutate(time = as.factor(time)) %>%
+  group_by(time) %>%
+  summarise(X1 = sum(X1 * weight),
+            X2 = sum(X2 * weight))
+smoothing_mean <- smoothing_exp %>% 
+  as_tibble() %>% 
+  rename(X1 = V1, X2 = V2)
 ggplot(mapping = aes(x = X1, y = X2)) +
   geom_point(data = results, mapping = aes(alpha = weight), col = "blue") +
-  geom_point(data = as.data.frame(simulated_process))
+  geom_path(data = empirical_mean, col = "darkgreen", size = 2) +
+  geom_path(data = smoothing_mean, col = "red", size = 1.5) +
+  geom_path(data = as.data.frame(simulated_process)) 
 ```
 

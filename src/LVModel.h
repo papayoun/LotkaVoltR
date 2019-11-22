@@ -21,7 +21,7 @@ private:
   arma::colvec lb = arma::zeros(2);
   arma::mat twoAndOnes;
   double intens_delta = 5;
-  double alpha_pow = 0.3;
+  double alpha_pow = 0.28;
   void createParam(){
     arma::mat par_tmp(2, 3);
     par_tmp(0, 0) = preyParam(0); 
