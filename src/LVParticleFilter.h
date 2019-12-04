@@ -28,14 +28,14 @@ private:
   const unsigned int backwardSampleSize = 30;
   std::vector<arma::mat> tau_EX_old; // cube of dim particleSize * 2 * observationSize
   std::vector<arma::mat> tau_EX; // cube of dim particleSize * 2 * observationSize
-  std::vector<arma::mat> tau_EStep;// numberModels matrices of dim particleSize * observationSize
+  std::vector<Rcpp::NumericMatrix> tau_EStep;// numberModels matrices of dim particleSize * observationSize
   // // // Methods //
   Rcpp::NumericVector normWeights(const Rcpp::NumericVector& unNormedWeights) const{
     return unNormedWeights / sum(unNormedWeights);};
   // Initialization methods
   void initializeTauEStep(const unsigned int numberModels){
-    std::vector<arma::mat>  initial(numberModels);
-    arma::mat zeroMatrix(particleSize, 2);
+    std::vector<Rcpp::NumericMatrix>  initial(numberModels);
+    Rcpp::NumericMatrix zeroMatrix(particleSize, 2);
     zeroMatrix.fill(0);
     for(unsigned int i = 0; i < numberModels; i++){
       initial[i] = zeroMatrix;
@@ -95,25 +95,22 @@ private:
     double time_lag = observationTimes(childIndex) - observationTimes(childIndex - 1);
     arma::rowvec old_particle = particleSet[childIndex - 1].row(ancestorParticleIndex);
     arma::rowvec new_particle = particleSet[childIndex].row(childParticleIndex);
+    arma::colvec current_obs  = observations.col(childIndex);
     for(unsigned int m = 0; m < testedModels.size(); m++){
-     ProposalLVModel model = testedModels[m];
-      double sampledLogQ = model.getModel().unbiasedLogDensityEstimate(particleSet(ancestorParticleIndex, childIndex - 1),
-                                          ,
-                                          
-                                          logDensitySampleSize,
-                                          skeletonSimulationMaxTry);
-      double transDens = model.evalTransitionDensity(selectedParticles, 
-                                                         newParts,
-                                                         time_lag, 
-                                                         densitySampleSize)[0];
-      double logtransDens = - pow(10, 9);
+      ProposalLVModel model = testedModels[m];
+      double transDens = model.evalTransitionDensity(old_particle, 
+                                                     new_particle,
+                                                     time_lag, 
+                                                     densitySampleSize)(0);
+      double logtransDens = - pow(10, 9); // My -Inf value
       if(transDens > 0){
         logtransDens = log(transDens);
       }
-      double logObsDensityTerm =  log(model.observationDensity(particleSet(childParticleIndex, childIndex),
-                                                               observations(childIndex)));
-      tauEStep[m](childParticleIndex, childIndex) += IS_weight * (tauEStep[m](ancestorParticleIndex, childIndex - 1) +
-        sampledLogQ + logObsDensityTerm);
+      double logObsDensityTerm =  log(model.evalObsDensity(new_particle,
+                                                           current_obs)(0));
+      tau_EStep[m](childParticleIndex, childIndex) += IS_weight * 
+        (tau_EStep[m](ancestorParticleIndex, childIndex - 1) +
+         logtransDens + logObsDensityTerm);
     }
   };
   void propagateParticles(const unsigned int& ancestorIndex){// Particle propagation

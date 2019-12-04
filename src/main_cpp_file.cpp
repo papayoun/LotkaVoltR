@@ -13,6 +13,15 @@
 //
 // [[Rcpp::depends(RcppArmadillo)]]
 
+ProposalLVModel generateModel(double theta0, double sigma20, 
+                              double sd, double thresh = 0.01){
+  double newTheta = theta0 + Rcpp::rnorm(1, 0, sd)[0];
+  double newSigma2 = sigma20 + Rcpp::rnorm(1, 0, sd)[0];
+  if(newSigma2 < thresh)
+    newSigma2 = thresh;
+  SINE_POD newModel(newTheta, newSigma2);
+  return newModel;
+}
 
 //'@title Run a Particle Filter on a POD based on a continuous LV model
 //'@name runLV_PF
@@ -25,9 +34,10 @@
 //'@return a list with particles and weights
 //'@export
 // [[Rcpp::export]]
-void runLV_PF(arma::mat obs_, Rcpp::NumericVector obsTimes_,//obs
-                       Rcpp::List myParams, // for the LV Model
-                       unsigned int n_part, unsigned int n_dens_samp) {
+void runLV_PF(arma::mat obs_,
+              Rcpp::NumericVector obsTimes_,//obs
+              Rcpp::List myParams, // for the LV Model
+              unsigned int n_part, unsigned int n_dens_samp) {
     // LVParticleFilter myPF(obs_, obsTimes_, myParams, n_part, n_dens_samp);
     // myPF.runPF();
     // return Rcpp::List::create(Rcpp::Named("parts") = myPF.getParticles(),
