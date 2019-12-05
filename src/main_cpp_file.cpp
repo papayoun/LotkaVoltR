@@ -13,8 +13,9 @@
 //
 // [[Rcpp::depends(RcppArmadillo)]]
 
-ProposalLVModel generateModel(double theta0, double sigma20, 
+ProposalLVModel generateModel(const ProposalLVModel model_ref, 
                               double sd, double thresh = 0.01){
+  Rcpp::NumericVector a1_ref = 
   double newTheta = theta0 + Rcpp::rnorm(1, 0, sd)[0];
   double newSigma2 = sigma20 + Rcpp::rnorm(1, 0, sd)[0];
   if(newSigma2 < thresh)
@@ -38,7 +39,7 @@ void runLV_PF(arma::mat obs_,
               Rcpp::NumericVector obsTimes_,//obs
               Rcpp::List myParams, // for the LV Model
               unsigned int n_part, unsigned int n_dens_samp) {
-    // LVParticleFilter myPF(obs_, obsTimes_, myParams, n_part, n_dens_samp);
+    LVParticleFilter myPF(obs_, obsTimes_, myParams, n_part, n_dens_samp);
     // myPF.runPF();
     // return Rcpp::List::create(Rcpp::Named("parts") = myPF.getParticles(),
     //                           Rcpp::Named("weights") = myPF.getWeights());
