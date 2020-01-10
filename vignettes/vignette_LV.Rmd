@@ -31,13 +31,9 @@ theme_set(theme_gray() +
                                           fill = rgb(0, 0, 0, 0)),
               panel.grid = element_line(linetype = 2),
               legend.background = element_blank(), 
-              text = element_text(family = "LM Roman 10"),
-              axis.title = element_text(size = 16),
-              legend.text = element_text(size = 14),
-              legend.title = element_text(size = 16),
-              axis.text = element_text(size = 14),
-              plot.subtitle = element_text(hjust = 0.5, size = 16),
-              plot.title = element_text(face = "bold", size = 18, hjust = 0.5)))
+              text = element_text(family = "Symbola", size = 24),
+              strip.background = element_rect(color = "black", 
+                                              fill = "lightgoldenrod1")))
 ```
 
 
@@ -118,10 +114,11 @@ Once the model is instantiate (through the `POLV_create` function used above), i
 # Simulation parameters
 
 simulation_times <- seq(from = 0, by = 1e-6, # Simulation time step, small!!
-                        length.out = 1.5*10^6 + 1)
+                        length.out = 3*10^6 + 1)
 
 # If the simulation must be done at small time steps, the output can be thinned
 selection <- seq(1, length(simulation_times), length.out = 301)
+set.seed(333)
 simulated_process <- POLV_simulate(POLV_model,
                                    times = simulation_times, 
                                    selection = selection)
@@ -149,11 +146,12 @@ or in the observation space:
 
 ```{r plot_LV_space, echo = F, eval = T}
 simulated_data %>% 
-  filter(status == "Observed") %>% # Only the observed
+  filter(status == "True") %>% # Only the observed
   spread(key = animal, value = value) %>% 
   ggplot() + 
   aes(x = prey, y = pred) +
-  geom_point(aes(alpha = t), col = "darkgreen")  + 
+  geom_path(aes(alpha = t), col = "darkgreen")  + 
+  geom_point() +
   labs(x = "Observed number of preys", y = "Observed number of predators",
        alpha = "Time")
 ```
@@ -168,7 +166,7 @@ For observed values $\mathbf{x}(t_0),\dots \mathbf{x}(t_n)$ recorded at times $t
 
 $$L(\mathbf{x}_{t_0:t_n};\theta) = \prod_{k = 1}^n q_{\delta_{k}}(\mathbf{x}_{t_{k - 1}}, \mathbf{x}_{t_{k}})$$
 
-Unfortunately, this quantity is untractable. The CIS algorithm, though, can be performed to obtained unbiased estimates of this quantity
+Unfortunately, this quantity is intractable. The CIS algorithm, though, can be performed to obtained unbiased estimates of this quantity
 
 ## Obtaining unbiased density estimate for one transition
 
@@ -184,7 +182,7 @@ x1 <- simulated_process[ind_obs1, c("X1", "X2")] # Subsequent number
 delta_lag <- observation_times[ind_obs1] - observation_times[ind_obs0] # time lag
 
 # The density is then esimated
-
+set.seed(333)
 estimated_density <- POLV_density(POLV_model = POLV_model, # For the given model
                                   x0 = x0, # Starting point  
                                   xT = x1, # Ending point
@@ -382,7 +380,6 @@ summary(ess)
 #   geom_point(data = as.data.frame(simulated_process))
 ```
 
-
 ## Using the class `ParticleFilter`
 
 ```{r PF_create}
@@ -391,8 +388,11 @@ observations <- simulated_process[, c("Y1", "Y2")]
 tic()
 particle_filter <- PF_create(parameters_list, t(observations),
                              observation_times, 2e2,
-                             n_euler_skel = 100)
+                             n_euler_skel = 30)
 smoothing_exp <- particle_filter$runSmoothing()
+save(observations, observation_times, smoothing_exp, 
+     particle_filter,
+     file = "smoothed_tracking_LV.RData") 
 toc()
 ```
 
@@ -413,11 +413,30 @@ empirical_mean <- results %>%
             X2 = sum(X2 * weight))
 smoothing_mean <- smoothing_exp %>% 
   as_tibble() %>% 
-  rename(X1 = V1, X2 = V2)
-ggplot(mapping = aes(x = X1, y = X2)) +
-  geom_point(data = results, mapping = aes(alpha = weight), col = "blue") +
-  geom_path(data = empirical_mean, col = "darkgreen", size = 2) +
-  geom_path(data = smoothing_mean, col = "red", size = 1.5) +
-  geom_path(data = as.data.frame(simulated_process)) 
+  rename(X1 = V1, X2 = V2) %>% 
+  mutate(method = "Smoothing est.")
+observed_values <- simulated_process %>% 
+  as.data.frame() %>% 
+  select(Y1, Y2) %>% 
+  mutate(Y1 = Y1 / q_values[1],
+         Y2 = Y2 / q_values[2]) %>%
+  rename(X1 = Y1, X2 = Y2) %>% 
+  mutate(method = "Observed")
+true_values <- simulated_process %>% 
+  as.data.frame() %>% 
+  select(X1, X2) %>% 
+  mutate(method = "Truth")
+
+concatened_results <- bind_rows(observed_values,
+                                true_values,
+                                smoothing_mean)
+ggplot(concatened_results) +
+  aes(x = X1, y = X2, color = method, linetype = method) +
+  geom_point() +
+  geom_path() +
+  theme(legend.position = "none") + 
+  facet_wrap(~method) +
+  labs(x = "Number of preys", y = "Number of predators")
 ```
+
 
