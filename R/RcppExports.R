@@ -29,7 +29,7 @@ NULL
 NULL
 
 #'@title Run a Particle Filter on a POD based on a continuous LV model
-#'@name runLV_PF
+#'@name get_E_step
 #'@param a1 a2 Prey predatorsparameters
 #'@param obs matrix of observations
 #'@param obsTimes_ vector of ordered obs times
@@ -38,7 +38,7 @@ NULL
 #'@param n_dens_samp number of sampling for density
 #'@return a list with particles and weights
 #'@export
-runLV_PF <- function(obs_, obsTimes_, myParams, n_part, n_dens_samp) {
-    invisible(.Call('_LotkaVoltR_runLV_PF', PACKAGE = 'LotkaVoltR', obs_, obsTimes_, myParams, n_part, n_dens_samp))
+get_E_step <- function(obs_, obsTimes_, myParams, testedParams, n_part, n_dens_samp) {
+    .Call('_LotkaVoltR_get_E_step', PACKAGE = 'LotkaVoltR', obs_, obsTimes_, myParams, testedParams, n_part, n_dens_samp)
 }
 

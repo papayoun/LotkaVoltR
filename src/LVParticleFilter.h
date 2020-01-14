@@ -28,19 +28,20 @@ private:
   const unsigned int backwardSampleSize = 30;
   std::vector<arma::mat> tau_EX_old; // cube of dim particleSize * 2 * observationSize
   std::vector<arma::mat> tau_EX; // cube of dim particleSize * 2 * observationSize
-  std::vector<Rcpp::NumericMatrix> tau_EStep;// numberModels matrices of dim particleSize * observationSize
+  Rcpp::NumericMatrix tau_EStep;// matrix of particleSize * numberModels
+  Rcpp::NumericMatrix tau_EStep_old;// matrix of particleSize * numberModels
   // // // Methods //
   Rcpp::NumericVector normWeights(const Rcpp::NumericVector& unNormedWeights) const{
     return unNormedWeights / sum(unNormedWeights);};
   // Initialization methods
-  void initializeTauEStep(const unsigned int numberModels){
-    std::vector<Rcpp::NumericMatrix>  initial(numberModels);
-    Rcpp::NumericMatrix zeroMatrix(particleSize, 2);
+  void initializeTauEStep(const unsigned int numberModels,
+                          const bool both = false){
+    Rcpp::NumericMatrix zeroMatrix(particleSize, numberModels);
     zeroMatrix.fill(0);
-    for(unsigned int i = 0; i < numberModels; i++){
-      initial[i] = zeroMatrix;
+    tau_EStep = zeroMatrix;
+    if(both){
+      tau_EStep_old = zeroMatrix;
     }
-    tau_EStep = initial;
   };
   void initializeTau_EX(bool both = false){
     arma::mat zeroMatrix(particleSize, 2);
@@ -63,10 +64,10 @@ private:
   };
   void setInitalParticles(){ // Simulating initial particles
     arma::mat firstPart = propModel.simFirstPart(particleSize, 
-                                                  observations.col(0));
+                                                 observations.col(0));
     particleSet[0] = firstPart;
     Rcpp::NumericVector obsDens = propModel.evalObsDensity(firstPart,
-                                       observations.col(0));
+                                                           observations.col(0));
     Rcpp::NumericVector modDens = propModel.evalInitialModelDensity(firstPart);
     Rcpp::NumericVector propDens = propModel.evalInitialPropDensity(firstPart,
                                                                     observations.col(0));
@@ -108,14 +109,14 @@ private:
       }
       double logObsDensityTerm =  log(model.evalObsDensity(new_particle,
                                                            current_obs)(0));
-      tau_EStep[m](childParticleIndex, childIndex) += IS_weight * 
-        (tau_EStep[m](ancestorParticleIndex, childIndex - 1) +
-         logtransDens + logObsDensityTerm);
+      tau_EStep(childParticleIndex, m) += IS_weight * 
+        (tau_EStep_old(ancestorParticleIndex, m) +
+        logtransDens + logObsDensityTerm);
     }
   };
   void propagateParticles(const unsigned int& ancestorIndex){// Particle propagation
     double time_lag = (observationTimes[ancestorIndex + 1] -
-                        observationTimes[ancestorIndex]);
+                       observationTimes[ancestorIndex]);
     Rcpp::NumericVector currentWeights = filteringWeights(Rcpp::_, ancestorIndex);
     Rcpp::IntegerVector selectedInd = Utils::sampleReplace(particleInd, 
                                                            particleSize,
@@ -223,11 +224,11 @@ public:
             bool get_h = (j == k); // In this cas, the h function is either x or 0
             updateTauTracking_IS(j, i, ancestInd(l), IS_weights(l), get_h);
           }
-        }
-      }
+        } // Ends the backward sampling
+      } // Ends the loop over particles
       tau_EX_old = tau_EX; // Updating the functionnal tau_{k-1} <- tau_k
       initializeTau_EX(false); // reputing tau_EX to 0
-    }
+    } // End for the loop over observations
     tau_EX_old[observationSize - 1] = particleSet[observationSize - 1]; 
     Rcpp::NumericVector lastWeights = filteringWeights(Rcpp::_, 
                                                        observationSize - 1);
@@ -241,13 +242,18 @@ public:
       }
     }
     return output;
-}// End of eval_EX_smoothing
+  }// End of eval_EX_smoothing
+  
   Rcpp::NumericVector evalEStep_IS(const std::vector<ProposalLVModel>& testedModels){
+    DebugMethods db;
     unsigned int numberModels = testedModels.size();
-    Rcpp::NumericVector output(numberModels);
-    initializeTauEStep(numberModels);// Initialize matrix of 0
-    setInitalParticles();
     unsigned int observationSize = observations.n_cols;
+    Rcpp::NumericVector output(numberModels);
+    db.here();
+    initializeTauEStep(numberModels, true);// Initialize both matrices to 0
+    db.here();
+    setInitalParticles();
+    db.here();
     for(int k = 0; k < (observationSize - 1); k++){
       // DebugMethods db;
       std::cout << "observation " << k <<std::endl;
@@ -273,18 +279,27 @@ public:
                      observationTimes(k + 1) - observationTimes(k),
                      densitySampleSize, 200)(0);
           sum_IS_weights += IS_weights(l);
+        } // End of computing backward sampling weights
+        if(sum_IS_weights == 0){
+          IS_weights.fill(1);
+          sum_IS_weights = sum(IS_weights);
         }
         IS_weights = IS_weights / sum_IS_weights;
         for(unsigned int l = 0; l < backwardSampleSize; l++){
           updateTauEStep_IS(k + 1, i, ancestInd(l), IS_weights(l), testedModels);
           //k + 1 is the time index from which the backward is done, 
           //i is the corresponding particle of this generation
-        }
-      }
-    }
+        } // Ends the backward sampling
+      } // Ends the loop over particles
+      tau_EStep_old = tau_EStep; // Updating the functionnal tau_{k-1} <- tau_k
+      initializeTauEStep(numberModels, false); // reputing tau_EStep to 0 (but not tau_EStep_old)
+    } // End for the loop over observations
+    DebugMethods::debugprint(tau_EStep_old, "tau_Estep");
     Rcpp::NumericVector lastWeights = filteringWeights(Rcpp::_, observationSize - 1);
+    DebugMethods::debugprint(lastWeights, "Last weights", false);
+    std::cout << "La somme vaut " << sum(lastWeights);
     for(int m = 0; m < numberModels; m++){
-      output[m] = sum(lastWeights * tau_EStep[m](Rcpp::_, observationSize - 1));
+      output[m] = sum(lastWeights * tau_EStep_old(Rcpp::_, m));
     }
     return output;
   };// end of evalEstep method;

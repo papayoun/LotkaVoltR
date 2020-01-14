@@ -6,18 +6,20 @@
 
 using namespace Rcpp;
 
-// runLV_PF
-void runLV_PF(arma::mat obs_, Rcpp::NumericVector obsTimes_, Rcpp::List myParams, unsigned int n_part, unsigned int n_dens_samp);
-RcppExport SEXP _LotkaVoltR_runLV_PF(SEXP obs_SEXP, SEXP obsTimes_SEXP, SEXP myParamsSEXP, SEXP n_partSEXP, SEXP n_dens_sampSEXP) {
+// get_E_step
+Rcpp::NumericVector get_E_step(arma::mat obs_, Rcpp::NumericVector obsTimes_, Rcpp::List myParams, Rcpp::List testedParams, unsigned int n_part, unsigned int n_dens_samp);
+RcppExport SEXP _LotkaVoltR_get_E_step(SEXP obs_SEXP, SEXP obsTimes_SEXP, SEXP myParamsSEXP, SEXP testedParamsSEXP, SEXP n_partSEXP, SEXP n_dens_sampSEXP) {
 BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< arma::mat >::type obs_(obs_SEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type obsTimes_(obsTimes_SEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type myParams(myParamsSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type testedParams(testedParamsSEXP);
     Rcpp::traits::input_parameter< unsigned int >::type n_part(n_partSEXP);
     Rcpp::traits::input_parameter< unsigned int >::type n_dens_samp(n_dens_sampSEXP);
-    runLV_PF(obs_, obsTimes_, myParams, n_part, n_dens_samp);
-    return R_NilValue;
+    rcpp_result_gen = Rcpp::wrap(get_E_step(obs_, obsTimes_, myParams, testedParams, n_part, n_dens_samp));
+    return rcpp_result_gen;
 END_RCPP
 }
 
@@ -27,7 +29,7 @@ RcppExport SEXP _rcpp_module_boot_PF_Module();
 RcppExport SEXP _rcpp_module_boot_ProposalLVModel_Module();
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_LotkaVoltR_runLV_PF", (DL_FUNC) &_LotkaVoltR_runLV_PF, 5},
+    {"_LotkaVoltR_get_E_step", (DL_FUNC) &_LotkaVoltR_get_E_step, 6},
     {"_rcpp_module_boot_LV_Module", (DL_FUNC) &_rcpp_module_boot_LV_Module, 0},
     {"_rcpp_module_boot_LVPOD_Module", (DL_FUNC) &_rcpp_module_boot_LVPOD_Module, 0},
     {"_rcpp_module_boot_PF_Module", (DL_FUNC) &_rcpp_module_boot_PF_Module, 0},

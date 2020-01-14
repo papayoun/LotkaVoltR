@@ -1,0 +1,114 @@
+---
+title: "The stochastic Lotka-Volterra model, simulation and maximum likelihood inference"
+author: "Vignette by Pierre Gloaguen, based on a joint work with Sylvain Le Corff"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    number_sections: yes
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, message = FALSE, include = FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(
+  eval = TRUE,
+  collapse = TRUE,
+  comment = NA,
+  cache = T,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 6
+)
+theme_set(theme_gray() +
+            theme(
+              panel.border = element_rect(colour = "black", 
+                                          fill = rgb(0, 0, 0, 0)),
+              panel.grid = element_line(linetype = 2),
+              legend.background = element_blank(), 
+              text = element_text(family = "Symbola", size = 24),
+              strip.background = element_rect(color = "black", 
+                                              fill = "lightgoldenrod1")))
+```
+
+# E step
+
+```{r chosen_parameters, eval = T}
+rm(list = ls()) # Cleaning environment
+
+# Dynamics parameters
+
+a1 <- c(12, 0.05, 1) # Prey parameters
+a2 <- c(2, 0.2, 0.1) # Predator parameters
+Gamma <- matrix(c(0.5, 0.1, 0.1, 0.2), nrow = 2) # Diffusion parameters
+mu0 <- c(50, 20) # Mean of the inital distribution
+Sigma0 <- diag(1, 2) # Variance of the initial distribution
+
+# Observation process parameters
+
+Sigma_obs <- matrix(c(0.01, 0.005, 0.005, 0.01), ncol = 2) # Observation noise
+q_values <- c(0.2, 0.3) # Known q values
+
+# Model creation
+
+library(LotkaVoltR) # Dedicated library
+# Creation of a model instance in R
+POLV_model <- POLV_create(a1 = a1, a2 = a2, gam = Gamma, mu0 = mu0, 
+                          sigma0 = Sigma0, cov = Sigma_obs, qs = q_values)
+parameters_list <- list(a1 = a1, a2 = a2, mu0 = mu0,
+                        sigma0 = Sigma0, RWC = diag(0.005, 2), 
+                        qs = q_values, cov = Sigma_obs,
+                        wD = 1, wO = 1,
+                        gam = Gamma)
+proposal_model <- PLV_create(parameters_list)
+# Simulation parameters
+
+simulation_times <- seq(from = 0, by = 1e-6, # Simulation time step, small!!
+                        length.out = 10^4 + 1)
+
+# If the simulation must be done at small time steps, the output can be thinned
+selection <- seq(1, length(simulation_times), length.out = 51)
+set.seed(333)
+simulated_process <- POLV_simulate(POLV_model,
+                                   times = simulation_times, 
+                                   selection = selection)
+observation_times <- simulation_times[selection]
+simulated_data <- data.frame(value = as.numeric(simulated_process[, -5]),
+                             animal = factor(rep(rep(c("prey", "pred"), 
+                                                     each = length(selection)),
+                                                 2)),
+                             status = factor(rep(c("Observed", "True"), 
+                                                 each = 2 * length(selection))),
+                             t = rep(observation_times, 4))
+```
+
+```{r}
+parameters_list <- list(a1 = a1, a2 = a2, mu0 = mu0,
+                        sigma0 = Sigma0, RWC = diag(0.005, 2), 
+                        qs = q_values, cov = Sigma_obs,
+                        wD = 1, wO = 1,
+                        gam = Gamma)
+proposal_model <- PLV_create(parameters_list)
+observations <- simulated_process[, c("Y1", "Y2")]
+particle_filter <- PF_create(parameters_list, t(observations),
+                             observation_times, 2e2,
+                             n_euler_skel = 30)
+# particle_filter$runSmoothing()
+parameters_list2 <- list(a1 = 10*a1, a2 = 10*a2, mu0 = mu0,
+                        sigma0 = Sigma0, RWC = diag(0.005, 2), 
+                        qs = q_values, cov = Sigma_obs,
+                        wD = 1, wO = 1,
+                        gam = Gamma)
+generate_candidate_list <- function(parameters_list)
+get_E_step(obs_ = t(observations[1:18,]), 
+           obsTimes_ = observation_times[1:18], 
+           myParams = parameters_list, 
+           testedParams = list(parameters_list, parameters_list2), 
+           n_part = 100, n_dens_samp = 30)
+```
+

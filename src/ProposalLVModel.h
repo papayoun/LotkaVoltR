@@ -46,6 +46,9 @@ private:
                               Rcpp::Named("cov")  = outCov);
   }
 public:
+  ProposalLVModel()
+    : trueModel(), aroundObsCov(arma::eye(2, 2)), randomWalkCov(arma::eye(2, 2)){
+  }
   ProposalLVModel(Rcpp::List L)
     : trueModel(), aroundObsCov(arma::eye(2, 2)), randomWalkCov(arma::eye(2, 2)){
     arma::colvec a1(3, arma::fill::zeros);
