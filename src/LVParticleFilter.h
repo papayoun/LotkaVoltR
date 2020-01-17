@@ -25,7 +25,7 @@ private:
   Rcpp::IntegerVector  backwardIndexCandidates; // simulate several at a time
   // Inference objects
   const Rcpp::IntegerVector particleIndexes;
-  const unsigned int backwardSampleSize = 30;
+  unsigned int backwardSampleSize;
   std::vector<arma::mat> tau_EX_old; // cube of dim particleSize * 2 * observationSize
   std::vector<arma::mat> tau_EX; // cube of dim particleSize * 2 * observationSize
   Rcpp::NumericMatrix tau_EStep;// matrix of particleSize * numberModels
@@ -156,6 +156,7 @@ public:
       particleSet(obs_.n_cols),
       particleIndexes(Rcpp::seq_len(n_part)  - 1),
       densitySampleSize(n_dens_samp){
+    backwardSampleSize = n_part * 0.1;
     initializeParticleSet();
   };
   // Getters
@@ -194,7 +195,7 @@ public:
     DebugMethods db;
     for(int k = 0; k < (observationSize - 1); k++){
       // DebugMethods db;
-      std::cout << "observation " << k <<std::endl;
+      // std::cout << "observation " << k <<std::endl;
       propagateParticles(k);
       // initializeBackwardSampling(k);// Samples of ancestor index is made here
       Rcpp::NumericVector currentWeights = filteringWeights(Rcpp::_, k);
@@ -249,14 +250,11 @@ public:
     unsigned int numberModels = testedModels.size();
     unsigned int observationSize = observations.n_cols;
     Rcpp::NumericVector output(numberModels);
-    db.here();
     initializeTauEStep(numberModels, true);// Initialize both matrices to 0
-    db.here();
     setInitalParticles();
-    db.here();
     for(int k = 0; k < (observationSize - 1); k++){
       // DebugMethods db;
-      std::cout << "observation " << k <<std::endl;
+      // std::cout << "observation " << k <<std::endl;
       propagateParticles(k);
       // initializeBackwardSampling(k);// Samples of ancestor index is made here
       Rcpp::NumericVector currentWeights = filteringWeights(Rcpp::_, k);
@@ -294,10 +292,7 @@ public:
       tau_EStep_old = tau_EStep; // Updating the functionnal tau_{k-1} <- tau_k
       initializeTauEStep(numberModels, false); // reputing tau_EStep to 0 (but not tau_EStep_old)
     } // End for the loop over observations
-    DebugMethods::debugprint(tau_EStep_old, "tau_Estep");
     Rcpp::NumericVector lastWeights = filteringWeights(Rcpp::_, observationSize - 1);
-    DebugMethods::debugprint(lastWeights, "Last weights", false);
-    std::cout << "La somme vaut " << sum(lastWeights);
     for(int m = 0; m < numberModels; m++){
       output[m] = sum(lastWeights * tau_EStep_old(Rcpp::_, m));
     }
