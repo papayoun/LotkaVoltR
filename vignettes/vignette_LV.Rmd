@@ -182,12 +182,12 @@ x1 <- simulated_process[ind_obs1, c("X1", "X2")] # Subsequent number
 delta_lag <- observation_times[ind_obs1] - observation_times[ind_obs0] # time lag
 
 # The density is then esimated
-set.seed(333)
+# set.seed(333)
 estimated_density <- POLV_density(POLV_model = POLV_model, # For the given model
                                   x0 = x0, # Starting point  
                                   xT = x1, # Ending point
                                   time_lag = delta_lag, # Duration between obs
-                                  n_samples = 500 # Monte Carlo effort
+                                  n_samples = 30 # Monte Carlo effort
                                   )
 estimated_density
 ```
@@ -382,7 +382,7 @@ summary(ess)
 
 ## Using the class `ParticleFilter`
 
-```{r PF_create}
+```{r PF_create, eval = F}
 library(tictoc)
 observations <- simulated_process[, c("Y1", "Y2")]
 tic()
@@ -396,7 +396,7 @@ save(observations, observation_times, smoothing_exp,
 toc()
 ```
 
-```{r plot_results_PF}
+```{r get_filtering_exp}
 n_obs <- nrow(observations)
 my_particle_set <- particle_filter$get_particles()
 my_particle_weights <- particle_filter$get_weights()
@@ -411,32 +411,44 @@ empirical_mean <- results %>%
   group_by(time) %>%
   summarise(X1 = sum(X1 * weight),
             X2 = sum(X2 * weight))
+```
+
+
+```{r plot_results_PF}
+
+my_levels <- c(obs = 'Y[t]',
+               est = 'hat("\U1d53c")~"["~X[t]~"|"~Y[0:n]~"]"',
+               true = 'X[t]')
+
+load("smoothed_tracking_LV.RData")
 smoothing_mean <- smoothing_exp %>% 
   as_tibble() %>% 
   rename(X1 = V1, X2 = V2) %>% 
-  mutate(method = "Smoothing est.")
+  mutate(method = my_levels["est"])
 observed_values <- simulated_process %>% 
   as.data.frame() %>% 
   select(Y1, Y2) %>% 
   mutate(Y1 = Y1 / q_values[1],
          Y2 = Y2 / q_values[2]) %>%
   rename(X1 = Y1, X2 = Y2) %>% 
-  mutate(method = "Observed")
+  mutate(method = my_levels["obs"])
 true_values <- simulated_process %>% 
   as.data.frame() %>% 
   select(X1, X2) %>% 
-  mutate(method = "Truth")
+  mutate(method = my_levels["true"])
 
 concatened_results <- bind_rows(observed_values,
                                 true_values,
-                                smoothing_mean)
+                                smoothing_mean) %>% 
+  mutate(method = factor(method, levels = my_levels)) # Pour l'ordre
 ggplot(concatened_results) +
   aes(x = X1, y = X2, color = method, linetype = method) +
   geom_point() +
   geom_path() +
   theme(legend.position = "none") + 
-  facet_wrap(~method) +
-  labs(x = "Number of preys", y = "Number of predators")
+  facet_wrap(~method, labeller = label_parsed) + 
+  labs(x = "Number of preys", y = "Number of predators") +
+  theme(strip.text = element_text(size = 24))
 ```
 
 

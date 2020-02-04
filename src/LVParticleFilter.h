@@ -18,6 +18,7 @@ private:
   const unsigned int particleSize; // Number of particles
   std::vector<arma::mat> particleSet;
   Rcpp::NumericMatrix filteringWeights; // particleSize * n matrix
+  Rcpp::IntegerMatrix selectedIndex;
   const Rcpp::IntegerVector particleInd; // vector 1:particleSize
   const unsigned int densitySampleSize;
   // backward sampling objects
@@ -43,6 +44,15 @@ private:
       tau_EStep_old = zeroMatrix;
     }
   };
+  void initializeSelectedIndex(){
+    Rcpp::IntegerMatrix out(particleSize, observations.n_cols);
+    for(unsigned int col_index = 0; col_index < observations.n_cols; col_index++){
+      for(int i = 0; i < particleSize; i++){
+        out(i, col_index) = i;
+      }
+    }
+    selectedIndex = out;
+  }
   void initializeTau_EX(bool both = false){
     arma::mat zeroMatrix(particleSize, 2);
     zeroMatrix.fill(0);
@@ -140,6 +150,7 @@ private:
     Rcpp::NumericVector obsDens = propModel.evalObsDensity(newParts, futureObs);
     Rcpp::NumericVector unNormedWeights = transDens * obsDens / propDens;
     filteringWeights(Rcpp::_, ancestorIndex + 1) = normWeights(unNormedWeights);
+    selectedIndex(Rcpp::_, ancestorIndex) = selectedInd;
   };
 public:
   // Constructor
@@ -158,6 +169,7 @@ public:
       densitySampleSize(n_dens_samp){
     backwardSampleSize = n_part * 0.1;
     initializeParticleSet();
+    initializeSelectedIndex();
   };
   // Getters
   arma::cube getParticles() const{
@@ -177,6 +189,9 @@ public:
   Rcpp::NumericMatrix getWeights() const{
     return filteringWeights;
   };
+  Rcpp::IntegerMatrix getSelectedInds() const{
+    return selectedIndex;
+  }
   // Main function
   void runPF(){
     // DebugMethods db;
@@ -192,15 +207,15 @@ public:
     unsigned int observationSize = observations.n_cols;
     initializeTau_EX(true);// Initialize both tau_EX and tau_EX_old to 0 arrays
     setInitalParticles();
-    DebugMethods db;
     for(int k = 0; k < (observationSize - 1); k++){
+      DebugMethods db;
       // DebugMethods db;
-      // std::cout << "observation " << k <<std::endl;
+      std::cout << "observation " << k <<std::endl;
       propagateParticles(k);
       // initializeBackwardSampling(k);// Samples of ancestor index is made here
       Rcpp::NumericVector currentWeights = filteringWeights(Rcpp::_, k);
       for(unsigned int i = 0; i < particleSize; i++){// i indexes particles
-        // db.here();
+        db.here();
         // DebugMethods::debugprint(tau_EX[0], "EX");
         // DebugMethods::debugprint(tau_EX_old[0], "EX_old");
         // setDensityUpperBound(k + 1, i);// Density upperbound for particle xi_{k+1}^i
@@ -254,7 +269,7 @@ public:
     setInitalParticles();
     for(int k = 0; k < (observationSize - 1); k++){
       // DebugMethods db;
-      // std::cout << "observation " << k <<std::endl;
+      std::cout << "observation " << k <<std::endl;
       propagateParticles(k);
       // initializeBackwardSampling(k);// Samples of ancestor index is made here
       Rcpp::NumericVector currentWeights = filteringWeights(Rcpp::_, k);
@@ -310,6 +325,7 @@ RCPP_MODULE(PF_Module) {
     .method("get_weights", &LVParticleFilter::getWeights)
     .method("runSmoothing", &LVParticleFilter::eval_EX_smoothing)
     .method("get_tau_EX", &LVParticleFilter::get_tau_EX)
+    .method("get_indexes", &LVParticleFilter::getSelectedInds)
   ;
 }
 

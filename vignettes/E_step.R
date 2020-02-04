@@ -28,10 +28,10 @@ parameters_list <- list(a1 = a1, a2 = a2, mu0 = mu0,
 # Simulation parameters
 
 simulation_times <- seq(from = 0, by = 1e-6, # Simulation time step, small!!
-                        length.out = 10^6 + 1)
+                        length.out = 0.1 * 10^6 + 1)
 
 # If the simulation must be done at small time steps, the output can be thinned
-selection <- seq(1, length(simulation_times), length.out = 201)
+selection <- seq(1, length(simulation_times), length.out = 51)
 set.seed(333)
 simulated_process <- POLV_simulate(POLV_model,
                                    times = simulation_times, 
@@ -78,6 +78,7 @@ generate_candidate_list <- function(par_list,
 }
 
 
+
 ## ------------------------------------------------------------------------
 
 EM_function <- function(obs, obs_times, initial_param, initial_sd,
@@ -87,6 +88,7 @@ EM_function <- function(obs, obs_times, initial_param, initial_sd,
   param_0 <- initial_param
   out <- list(param_0)
   set.seed(seed)
+  final_E_steps <- matrix(NA, nrow = n_iter, ncol = n_cands + 1)
   for(i in 1:n_iter){
     print(paste("Iteration", i))
     par_list <- c(purrr::rerun(n_cands, 
@@ -102,7 +104,8 @@ EM_function <- function(obs, obs_times, initial_param, initial_sd,
                              function(x) 0.9 * x)
     param_0 <- par_list[[which.max(E_step_evals)]]
     out <- c(out, list(param_0))
-    save(out, E_step_evals, initial_sd, 
+    final_E_steps[i, ] <- E_step_evals 
+    save(out, final_E_steps, initial_sd, 
          file = paste0("EM_repl_", seed, "_", name, ".RData"))
   }
   return(out)
@@ -139,7 +142,7 @@ if(my_seed > 0){
     EM_function(observations, observation_times,
                 param0, sd_list, n_cands = 10,
                 n_iter = 30, seed = i,
-                name = name)
+                name = my_name)
   }, mc.cores = 5)
 }
 

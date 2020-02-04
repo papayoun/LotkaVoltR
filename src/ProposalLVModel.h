@@ -39,6 +39,8 @@ private:
     arma::mat dynamicsCov = diagPartMat * randomWalkCov * diagPartMat * timeLag;
     arma::mat dynamicsPrec = arma::inv_sympd(dynamicsCov) * wDyn;
     arma::mat obsPrec = aroundObsPrec * wObs;
+    // DebugMethods::debugprint(obsPrec, "obsPrec");
+    // DebugMethods::debugprint(aroundObsPrec, "aroundObsPrec");
     arma::mat outCov = arma::inv_sympd(dynamicsPrec + obsPrec);
     arma::colvec mDyn = trueModel.getEulerMean(oldX, timeLag);
     arma::mat outMean = outCov * (dynamicsPrec * mDyn + obsPrec * newY);

@@ -71,8 +71,8 @@ public:
     tmp(0, 0) = tmp(1, 1) = 2;
     twoAndOnes = tmp;
     for(unsigned int i = 0; i < 3; i ++){
-      bool cond1 = preyParam(i) > 0;
-      bool cond2 = predParam(i) > 0;
+      bool cond1 = preyParam(i) >= 0;
+      bool cond2 = predParam(i) >= 0;
       if(!(cond1 & cond2)){
         Rcpp::stop("All parameters of the pred-prey dynamics must be > 0");
       };
@@ -181,8 +181,11 @@ public:
       return(0); // Simulated vector must be positive
     }
     Rcpp::NumericVector samples(sampleSize);
-    for(unsigned int i = 0; i < sampleSize; i++){
-      samples(i) = getUnbiasSignDensEstim(x0, xT, time_lag);
+    // for(unsigned int i = 0; i < sampleSize; i++){
+    //   samples(i) = getUnbiasSignDensEstim(x0, xT, time_lag);
+    // }
+    for(Rcpp::NumericVector::iterator i = samples.begin(); i != samples.end(); ++i) {
+      *i = getUnbiasSignDensEstim(x0, xT, time_lag);
     }
     return Rcpp::mean(samples);
   }
