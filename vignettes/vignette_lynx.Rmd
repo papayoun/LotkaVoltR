@@ -10,7 +10,7 @@ output:
 
 ```{r setup, include=FALSE, message = FALSE}
 library(tidyverse)
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 ```
 
 # Lynx and hares data set

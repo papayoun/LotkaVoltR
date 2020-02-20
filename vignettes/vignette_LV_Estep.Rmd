@@ -17,7 +17,7 @@ editor_options:
 ```{r setup, message = FALSE, include = FALSE}
 library(tidyverse)
 knitr::opts_chunk$set(
-  eval = TRUE,
+  eval = FALSE,
   collapse = TRUE,
   comment = NA,
   cache = T,
