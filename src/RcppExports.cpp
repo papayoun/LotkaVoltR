@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // get_E_step
 Rcpp::NumericVector get_E_step(arma::mat obs_, Rcpp::NumericVector obsTimes_, Rcpp::List myParams, Rcpp::List testedParams, unsigned int n_part, unsigned int n_dens_samp);
 RcppExport SEXP _LotkaVoltR_get_E_step(SEXP obs_SEXP, SEXP obsTimes_SEXP, SEXP myParamsSEXP, SEXP testedParamsSEXP, SEXP n_partSEXP, SEXP n_dens_sampSEXP) {

@@ -215,7 +215,7 @@ public:
       // initializeBackwardSampling(k);// Samples of ancestor index is made here
       Rcpp::NumericVector currentWeights = filteringWeights(Rcpp::_, k);
       for(unsigned int i = 0; i < particleSize; i++){// i indexes particles
-        db.here();
+        // db.here();
         // DebugMethods::debugprint(tau_EX[0], "EX");
         // DebugMethods::debugprint(tau_EX_old[0], "EX_old");
         // setDensityUpperBound(k + 1, i);// Density upperbound for particle xi_{k+1}^i
